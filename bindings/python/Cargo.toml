@@ -1,0 +1,13 @@
+[package]
+name = "blurhash-python"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "blurhash"
+crate-type = ["cdylib"]
+
+[dependencies]
+blurhash-core = { path = "../../crates/blurhash-core" }
+pyo3 = { version = "0.23", features = ["extension-module"] }

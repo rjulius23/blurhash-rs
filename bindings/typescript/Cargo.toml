@@ -1,0 +1,16 @@
+[package]
+name = "blurhash-typescript"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+blurhash-core = { path = "../../crates/blurhash-core" }
+napi = { version = "3", features = ["napi6"] }
+napi-derive = "3"
+
+[build-dependencies]
+napi-build = "2"

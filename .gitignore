@@ -1,0 +1,31 @@
+# Rust
+/target/
+**/target/
+Cargo.lock
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+dist/
+.venv/
+*.whl
+
+# TypeScript / Node.js
+node_modules/
+*.node
+npm-debug.log*
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Benchmark reports (regenerated via cargo bench)
+target/criterion/

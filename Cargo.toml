@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/blurhash-core", "bindings/python", "bindings/typescript"]
+resolver = "2"

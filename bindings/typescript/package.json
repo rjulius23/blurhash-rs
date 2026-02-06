@@ -1,0 +1,34 @@
+{
+  "name": "blurhash-rs",
+  "version": "0.1.0",
+  "description": "High-performance BlurHash encoding and decoding (Rust-powered N-API binding)",
+  "main": "index.js",
+  "types": "index.d.ts",
+  "license": "MIT",
+  "napi": {
+    "name": "blurhash-rs",
+    "triples": {
+      "defaults": true,
+      "additional": [
+        "aarch64-apple-darwin",
+        "aarch64-unknown-linux-gnu",
+        "aarch64-unknown-linux-musl",
+        "aarch64-pc-windows-msvc"
+      ]
+    }
+  },
+  "scripts": {
+    "artifacts": "napi artifacts",
+    "build": "napi build --release --platform",
+    "build:debug": "napi build --platform",
+    "prepublishOnly": "napi prepublish -t npm",
+    "test": "node --test __tests__/index.test.mjs"
+  },
+  "devDependencies": {
+    "@napi-rs/cli": "^3.0.0"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts"
+  ]
+}
