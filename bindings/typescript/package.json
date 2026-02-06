@@ -31,16 +31,16 @@
     "node": ">=18"
   },
   "napi": {
-    "name": "blurhash-rs",
-    "triples": {
-      "defaults": true,
-      "additional": [
-        "aarch64-apple-darwin",
-        "aarch64-unknown-linux-gnu",
-        "aarch64-unknown-linux-musl",
-        "aarch64-pc-windows-msvc"
-      ]
-    }
+    "binaryName": "blurhash-rs",
+    "targets": [
+      "x86_64-apple-darwin",
+      "aarch64-apple-darwin",
+      "x86_64-unknown-linux-gnu",
+      "x86_64-pc-windows-msvc",
+      "aarch64-unknown-linux-gnu",
+      "aarch64-unknown-linux-musl",
+      "aarch64-pc-windows-msvc"
+    ]
   },
   "scripts": {
     "artifacts": "napi artifacts",
@@ -56,5 +56,14 @@
     "index.js",
     "index.d.ts",
     "README.md"
-  ]
+  ],
+  "optionalDependencies": {
+    "blurhash-rs-darwin-x64": "0.1.0",
+    "blurhash-rs-darwin-arm64": "0.1.0",
+    "blurhash-rs-linux-x64-gnu": "0.1.0",
+    "blurhash-rs-win32-x64-msvc": "0.1.0",
+    "blurhash-rs-linux-arm64-gnu": "0.1.0",
+    "blurhash-rs-linux-arm64-musl": "0.1.0",
+    "blurhash-rs-win32-arm64-msvc": "0.1.0"
+  }
 }
