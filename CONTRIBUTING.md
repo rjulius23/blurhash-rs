@@ -142,8 +142,8 @@ blurhash-rs/
     blurhash-core/         # Core Rust library
       src/
         lib.rs             # Public API
-        encode.rs          # Encoding implementation
-        decode.rs          # Decoding implementation
+        encode_impl.rs     # Encoding implementation
+        decode_impl.rs     # Decoding implementation
         base83.rs          # Base83 codec
         color.rs           # Color space conversions
         error.rs           # Error types

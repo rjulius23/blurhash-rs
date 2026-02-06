@@ -18,8 +18,8 @@ blurhash-rs/
         lib.rs                   # Public re-exports, top-level API
         base83.rs                # Base83 encoding/decoding
         color.rs                 # sRGB <-> linear color space conversions
-        encode.rs                # BlurHash encoding (image -> hash string)
-        decode.rs                # BlurHash decoding (hash string -> pixel buffer)
+        encode_impl.rs           # BlurHash encoding (image -> hash string)
+        decode_impl.rs           # BlurHash decoding (hash string -> pixel buffer)
         error.rs                 # Error types (thiserror)
       benches/
         blurhash_bench.rs        # Criterion benchmarks
@@ -54,8 +54,8 @@ The pure Rust library. Zero `unsafe` blocks. No FFI or platform-specific code. A
 | `lib.rs`    | Re-exports public API: `encode`, `decode`, `components`, `BlurhashError`. |
 | `base83.rs` | Base83 alphabet, `encode(value, length) -> Result<String>`, `decode(str) -> Result<u64>`. Uses a compile-time `[u8; 128]` lookup table for O(1) character-to-value mapping. |
 | `color.rs`  | `srgb_to_linear(u8) -> f64` (LUT-accelerated), `linear_to_srgb(f64) -> u8`, `sign_pow(f64, f64) -> f64`. All pure functions, no allocation. Includes a compile-time sRGB LUT built via Newton's method `const fn` for `pow`. |
-| `encode.rs` | `encode(pixels: &[u8], width, height, components_x, components_y) -> Result<String>`. Takes flat RGB byte buffer. Internally converts to linear, precomputes cosine tables, computes DCT, quantizes, and emits base83. |
-| `decode.rs` | `decode(blurhash, width, height, punch) -> Result<Vec<u8>>`. Returns flat RGB byte buffer. Also exposes `components(blurhash) -> Result<(u32, u32)>`. |
+| `encode_impl.rs` | `encode(pixels: &[u8], width, height, components_x, components_y) -> Result<String>`. Takes flat RGB byte buffer. Internally converts to linear, precomputes cosine tables, computes DCT, quantizes, and emits base83. |
+| `decode_impl.rs` | `decode(blurhash, width, height, punch) -> Result<Vec<u8>>`. Returns flat RGB byte buffer. Also exposes `components(blurhash) -> Result<(u32, u32)>`. |
 | `error.rs`  | `BlurhashError` enum covering all failure modes. |
 
 ### `bindings/python`

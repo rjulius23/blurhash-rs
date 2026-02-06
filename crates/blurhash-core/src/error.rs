@@ -3,7 +3,7 @@
 use thiserror::Error;
 
 /// Errors that can occur during BlurHash encoding or decoding.
-#[derive(Debug, Error)]
+#[derive(Debug, Clone, PartialEq, Eq, Error)]
 pub enum BlurhashError {
     /// The BlurHash string has an invalid length.
     #[error("invalid BlurHash length: expected {expected}, got {actual}")]
@@ -30,4 +30,15 @@ pub enum BlurhashError {
     /// A general encoding error.
     #[error("encoding error: {0}")]
     EncodingError(String),
+
+    /// The image dimensions are invalid (zero or too large).
+    #[error("invalid dimensions: {width}x{height} ({reason})")]
+    InvalidDimensions {
+        /// The width value.
+        width: u32,
+        /// The height value.
+        height: u32,
+        /// Why the dimensions are invalid.
+        reason: &'static str,
+    },
 }

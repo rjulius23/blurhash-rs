@@ -1,0 +1,25 @@
+Third-Party Notices
+====================
+
+This project implements the BlurHash algorithm and includes a reference
+copy of the original Python implementation for correctness validation.
+
+--------------------------------------------------------------------------------
+
+BlurHash Algorithm
+https://github.com/woltapp/blurhash
+
+Copyright (c) 2018 Wolt Enterprises
+Licensed under the MIT License.
+
+--------------------------------------------------------------------------------
+
+blurhash-python (reference implementation in reference/)
+https://github.com/halcy/blurhash-python
+
+Copyright (c) 2019 Lorenz Diener
+Licensed under the MIT License.
+
+The file reference/blurhash_python_original.py is a verbatim copy of the
+original blurhash-python source, included solely for cross-validation testing.
+It is not compiled into or distributed as part of any blurhash-rs package.

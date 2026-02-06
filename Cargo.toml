@@ -1,3 +1,10 @@
 [workspace]
 members = ["crates/blurhash-core", "bindings/python", "bindings/typescript"]
 resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/rjulius23/blurhash-rs"
+homepage = "https://github.com/rjulius23/blurhash-rs"
+rust-version = "1.70"

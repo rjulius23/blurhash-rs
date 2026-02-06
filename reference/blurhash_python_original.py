@@ -1,6 +1,12 @@
 """
 Original blurhash-python source code from https://github.com/halcy/blurhash-python
-This is the reference implementation we are porting to Rust.
+
+Copyright (c) 2019 Lorenz Diener
+Licensed under the MIT License.
+See https://github.com/halcy/blurhash-python/blob/master/LICENSE for full text.
+
+This file is included as a reference implementation for correctness validation.
+It is NOT part of the blurhash-rs library and is not distributed in any package.
 """
 import math
 

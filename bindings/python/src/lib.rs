@@ -34,8 +34,8 @@ fn encode(
 ///
 /// Args:
 ///     blurhash: The BlurHash string to decode.
-///     width: Desired output width in pixels.
-///     height: Desired output height in pixels.
+///     width: Desired output width in pixels (1..=10000).
+///     height: Desired output height in pixels (1..=10000).
 ///     punch: Contrast adjustment factor (default 1.0).
 ///
 /// Returns:

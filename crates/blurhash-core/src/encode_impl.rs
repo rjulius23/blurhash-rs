@@ -40,6 +40,24 @@ pub fn encode(
     components_x: u32,
     components_y: u32,
 ) -> Result<String, BlurhashError> {
+    if width == 0 || height == 0 {
+        return Err(BlurhashError::InvalidDimensions {
+            width,
+            height,
+            reason: "width and height must be > 0",
+        });
+    }
+
+    // Cap dimensions to prevent DoS via excessive CPU and memory usage.
+    const MAX_DIMENSION: u32 = 10_000;
+    if width > MAX_DIMENSION || height > MAX_DIMENSION {
+        return Err(BlurhashError::InvalidDimensions {
+            width,
+            height,
+            reason: "dimensions must be <= 10000",
+        });
+    }
+
     if !(1..=9).contains(&components_x) {
         return Err(BlurhashError::InvalidComponentCount {
             component: "x",
@@ -53,7 +71,15 @@ pub fn encode(
         });
     }
 
-    let expected_len = (width as usize) * (height as usize) * 3;
+    let expected_len = (width as u64)
+        .checked_mul(height as u64)
+        .and_then(|v| v.checked_mul(3))
+        .and_then(|v| usize::try_from(v).ok())
+        .ok_or(BlurhashError::InvalidDimensions {
+            width,
+            height,
+            reason: "dimensions overflow buffer size calculation",
+        })?;
     if pixels.len() != expected_len {
         return Err(BlurhashError::EncodingError(format!(
             "pixel buffer length {} does not match {}x{}x3 = {}",
@@ -105,18 +131,17 @@ pub fn encode(
     let mut max_ac_component: f64 = 0.0;
     let scale = 1.0 / (wf * hf);
 
-    for j in 0..components_y as usize {
-        for i in 0..components_x as usize {
+    for (j, cos_y_row) in cos_y.iter().enumerate() {
+        for (i, cos_x_row) in cos_x.iter().enumerate() {
             let norm_factor = if i == 0 && j == 0 { 1.0 } else { 2.0 };
             let mut r_sum = 0.0f64;
             let mut g_sum = 0.0f64;
             let mut b_sum = 0.0f64;
 
-            for y in 0..h {
-                let cos_y_val = cos_y[j][y];
+            for (y, &cos_y_val) in cos_y_row.iter().enumerate() {
                 let row_offset = y * w;
-                for x in 0..w {
-                    let basis = norm_factor * cos_x[i][x] * cos_y_val;
+                for (x, &cos_x_val) in cos_x_row.iter().enumerate() {
+                    let basis = norm_factor * cos_x_val * cos_y_val;
                     let px = &linear_pixels[row_offset + x];
                     r_sum += basis * px[0];
                     g_sum += basis * px[1];
@@ -125,7 +150,7 @@ pub fn encode(
             }
 
             let component = [r_sum * scale, g_sum * scale, b_sum * scale];
-            if !(i == 0 && j == 0) {
+            if i != 0 || j != 0 {
                 max_ac_component = max_ac_component
                     .max(component[0].abs())
                     .max(component[1].abs())
@@ -248,7 +273,7 @@ mod tests {
     #[test]
     fn test_encode_gradient() {
         // Horizontal gradient
-        let mut pixels = vec![0u8; 8 * 1 * 3];
+        let mut pixels = vec![0u8; 8 * 3];
         for x in 0..8 {
             let val = (x * 32).min(255) as u8;
             pixels[x * 3] = val;

@@ -115,9 +115,8 @@ fn decode_known_hash_dimensions() {
 #[test]
 fn decode_known_hash_pixel_range() {
     let pixels = decode(KNOWN_HASH, 8, 8, 1.0).expect("decode ok");
-    for &v in &pixels {
-        assert!(v <= 255, "pixel value out of range: {v}");
-    }
+    // Verify decode produced non-trivial output (not all zeros)
+    assert!(pixels.iter().any(|&v| v > 0));
 }
 
 #[test]

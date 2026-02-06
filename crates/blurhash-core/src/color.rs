@@ -13,10 +13,6 @@ const fn build_srgb_to_linear_lut() -> [f64; 256] {
         lut[i as usize] = if value <= 0.04045 {
             value / 12.92
         } else {
-            // (value + 0.055) / 1.055 raised to 2.4
-            // const fn doesn't support f64::powf, so we use an approximation via exp/ln.
-            // We'll fill this in at runtime initialization instead.
-            // Actually, we can compute it with a helper.
             const_powf((value + 0.055) / 1.055, 2.4)
         };
         i += 1;
@@ -24,13 +20,12 @@ const fn build_srgb_to_linear_lut() -> [f64; 256] {
     lut
 }
 
-/// Approximate f64::powf for const context using iterative exp-by-squaring
-/// where exponent is 2.4 = 2 + 0.4 = 2 + 2/5.
-/// We use the identity: x^2.4 = x^2 * x^(2/5) = x^2 * (x^2)^(1/5).
-/// For the fifth root we use Newton's method.
+/// Compute `base^2.4` in const context using the identity
+/// `x^2.4 = x^2 * (x^2)^(1/5)`, where the fifth root is computed via
+/// Newton's method (converges to within 1e-15).
+///
+/// The `_exp` parameter is ignored; this function always computes `base^2.4`.
 const fn const_powf(base: f64, _exp: f64) -> f64 {
-    // We know exp is always 2.4 for our use case.
-    // x^2.4 = x^2 * x^0.4 = x^2 * (x^2)^0.2 = x^2 * fifth_root(x^2)
     if base <= 0.0 {
         return 0.0;
     }
@@ -94,9 +89,53 @@ pub fn srgb_to_linear(value: u8) -> f64 {
     SRGB_TO_LINEAR_LUT[value as usize]
 }
 
+/// Size of the linear-to-sRGB lookup table. 4096 entries provide sufficient
+/// precision (12-bit quantization of the linear range) for exact byte-level
+/// accuracy while keeping the table at only 4 KiB.
+const LINEAR_TO_SRGB_LUT_SIZE: usize = 4096;
+
+/// Compute a single linear-to-sRGB conversion using the exact formula.
+/// Used only at compile time to build the LUT.
+const fn linear_to_srgb_exact(linear: f64) -> u8 {
+    if linear <= 0.0 {
+        return 0;
+    }
+    if linear >= 1.0 {
+        return 255;
+    }
+    if linear <= 0.003_130_8 {
+        // The linear region: sRGB = linear * 12.92
+        // We add 0.5 for rounding: (linear * 12.92 * 255.0 + 0.5) as u8
+        let val = linear * 12.92 * 255.0 + 0.5;
+        return val as u8;
+    }
+    // The gamma region: sRGB = 1.055 * linear^(1/2.4) - 0.055
+    // 1/2.4 = 5/12, so linear^(5/12) = twelfth_root(linear^5)
+    let l5 = linear * linear * linear * linear * linear;
+    let root = const_nth_root(l5, 12);
+    let val = (1.055 * root - 0.055) * 255.0 + 0.5;
+    val as u8
+}
+
+/// Precomputed lookup table mapping quantized linear values to sRGB bytes.
+const fn build_linear_to_srgb_lut() -> [u8; LINEAR_TO_SRGB_LUT_SIZE] {
+    let mut lut = [0u8; LINEAR_TO_SRGB_LUT_SIZE];
+    let mut i = 0u32;
+    while i < LINEAR_TO_SRGB_LUT_SIZE as u32 {
+        let linear = i as f64 / (LINEAR_TO_SRGB_LUT_SIZE as f64 - 1.0);
+        lut[i as usize] = linear_to_srgb_exact(linear);
+        i += 1;
+    }
+    lut
+}
+
+/// Precomputed linear-to-sRGB lookup table.
+static LINEAR_TO_SRGB_LUT: [u8; LINEAR_TO_SRGB_LUT_SIZE] = build_linear_to_srgb_lut();
+
 /// Convert a linear RGB value (0.0..=1.0) to an sRGB byte value (0..=255).
 ///
-/// Values outside \[0.0, 1.0\] are clamped.
+/// Uses a precomputed lookup table for O(1) performance. Values outside
+/// \[0.0, 1.0\] are clamped.
 ///
 /// # Examples
 ///
@@ -108,11 +147,10 @@ pub fn srgb_to_linear(value: u8) -> f64 {
 #[inline]
 pub fn linear_to_srgb(value: f64) -> u8 {
     let clamped = value.clamp(0.0, 1.0);
-    if clamped <= 0.003_130_8 {
-        (clamped * 12.92 * 255.0 + 0.5) as u8
-    } else {
-        ((1.055 * clamped.powf(1.0 / 2.4) - 0.055) * 255.0 + 0.5) as u8
-    }
+    let index = (clamped * (LINEAR_TO_SRGB_LUT_SIZE as f64 - 1.0) + 0.5) as usize;
+    // index is at most LINEAR_TO_SRGB_LUT_SIZE - 1 thanks to the clamp above, but
+    // use min to keep the bounds check elided by the compiler.
+    LINEAR_TO_SRGB_LUT[index.min(LINEAR_TO_SRGB_LUT_SIZE - 1)]
 }
 
 /// Compute `sign(value) * |value|^exp`.

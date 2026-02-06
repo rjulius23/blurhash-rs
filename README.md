@@ -88,33 +88,33 @@ let decoded_pixels = decode(&blurhash, 32, 32, 1.0)?;
 ```python
 import blurhash
 
-# Encode: 3D list of pixel values [height][width][rgb]
-image = [[[r, g, b] for x in range(width)] for y in range(height)]
-hash_str = blurhash.blurhash_encode(image, components_x=4, components_y=4)
+# Encode: flat bytes of RGB pixel data, width, height, component counts
+data = bytes(width * height * 3)  # RGB pixel data
+hash_str = blurhash.encode(data, width, height, components_x=4, components_y=4)
 print(f"BlurHash: {hash_str}")
 
-# Decode: returns 3D list of pixel values [height][width][rgb]
-pixels = blurhash.blurhash_decode(hash_str, width=32, height=32, punch=1.0)
+# Decode: returns bytes of RGB pixel data
+pixel_bytes = blurhash.decode(hash_str, width=32, height=32, punch=1.0)
 
 # Get component counts from an existing hash
-x, y = blurhash.blurhash_components(hash_str)
+x, y = blurhash.components(hash_str)
 ```
 
-### TypeScript
+### TypeScript / Node.js
 
 ```typescript
-import { encode, decode, components } from 'blurhash-rs';
+import { encode, decode, getComponents } from 'blurhash-rs';
 
-// Encode: flat Uint8Array of RGB pixel data
-const pixels = new Uint8Array(width * height * 3);
+// Encode: Buffer of RGB pixel data
+const pixels = Buffer.alloc(width * height * 3);
 const hash = encode(pixels, width, height, 4, 4);
 console.log(`BlurHash: ${hash}`);
 
-// Decode: returns Uint8Array of RGB pixel data
+// Decode: returns Buffer of RGB pixel data
 const decoded = decode(hash, 32, 32, 1.0);
 
 // Get component counts
-const { x, y } = components(hash);
+const { componentsX, componentsY } = getComponents(hash);
 ```
 
 ---
@@ -133,23 +133,23 @@ const { x, y } = components(hash);
 
 | Function | Signature | Description |
 |---|---|---|
-| `blurhash_encode` | `blurhash_encode(image, components_x=4, components_y=4, linear=False)` | Encodes a 3D pixel list into a BlurHash string. Set `linear=True` if input is already in linear color space. |
-| `blurhash_decode` | `blurhash_decode(blurhash, width, height, punch=1.0, linear=False)` | Decodes a BlurHash string into a 3D pixel list. Set `linear=True` to get linear color space output. |
-| `blurhash_components` | `blurhash_components(blurhash)` | Returns `(size_x, size_y)` component counts from a BlurHash string. |
+| `encode` | `encode(data: bytes, width: int, height: int, components_x: int = 4, components_y: int = 4) -> str` | Encodes flat RGB pixel bytes into a BlurHash string. |
+| `decode` | `decode(blurhash: str, width: int, height: int, punch: float = 1.0) -> bytes` | Decodes a BlurHash string into flat RGB pixel bytes. |
+| `components` | `components(blurhash: str) -> tuple[int, int]` | Returns `(size_x, size_y)` component counts from a BlurHash string. |
 
 ### TypeScript (`blurhash-rs`)
 
 | Function | Signature | Description |
 |---|---|---|
-| `encode` | `encode(pixels: Uint8Array, width: number, height: number, componentX?: number, componentY?: number): string` | Encodes flat RGB pixel data into a BlurHash string. Defaults to 4x4 components. |
-| `decode` | `decode(blurhash: string, width: number, height: number, punch?: number): Uint8Array` | Decodes a BlurHash string into flat RGB pixel data. Punch defaults to 1.0. |
-| `components` | `components(blurhash: string): { x: number, y: number }` | Returns the component counts from a BlurHash string. |
+| `encode` | `encode(data: Buffer, width: number, height: number, componentsX?: number, componentsY?: number): string` | Encodes flat RGB pixel data into a BlurHash string. Defaults to 4x4 components. |
+| `decode` | `decode(blurhash: string, width: number, height: number, punch?: number): Buffer` | Decodes a BlurHash string into flat RGB pixel data. Punch defaults to 1.0. |
+| `getComponents` | `getComponents(blurhash: string): { componentsX: number, componentsY: number }` | Returns the component counts from a BlurHash string. |
 
 ---
 
 ## Migration Guide (from blurhash-python)
 
-blurhash-rs is a **drop-in replacement** for [blurhash-python](https://github.com/halcy/blurhash-python). The API signatures, parameter names, default values, and return types are identical.
+blurhash-rs provides a high-performance alternative to [blurhash-python](https://github.com/halcy/blurhash-python). The Python binding uses flat byte buffers for efficiency.
 
 ### Step 1: Install
 
@@ -158,36 +158,25 @@ pip uninstall blurhash-python
 pip install blurhash-rs
 ```
 
-### Step 2: Update imports (optional)
+### Step 2: Update your code
 
-Your existing code should work unchanged:
+The module name is the same (`blurhash`), but the API uses flat byte buffers instead of nested lists:
 
 ```python
-# This still works -- the module name is the same
 import blurhash
 
-hash_str = blurhash.blurhash_encode(image)
-pixels = blurhash.blurhash_decode(hash_str, 32, 32)
+# Encode: flat RGB bytes instead of nested 3D lists
+pixel_bytes = bytes([r, g, b, ...])  # flat row-major RGB
+hash_str = blurhash.encode(pixel_bytes, width, height, components_x=4, components_y=4)
+
+# Decode: returns bytes instead of nested lists
+pixel_data = blurhash.decode(hash_str, 32, 32, punch=1.0)
+
+# Get component counts
+x, y = blurhash.components(hash_str)
 ```
 
-If you want to be explicit:
-
-```python
-# Alias for clarity
-import blurhash  # now powered by blurhash-rs
-```
-
-### Step 3: That's it
-
-All function signatures match exactly:
-
-| Function | blurhash-python | blurhash-rs | Match? |
-|---|---|---|---|
-| `blurhash_encode(image, components_x=4, components_y=4, linear=False)` | Yes | Yes | Identical |
-| `blurhash_decode(blurhash, width, height, punch=1.0, linear=False)` | Yes | Yes | Identical |
-| `blurhash_components(blurhash)` | Yes | Yes | Identical |
-
-Output is **byte-identical** -- the same input produces the exact same BlurHash string. Cached hashes remain valid. No visual regressions.
+Output is **byte-identical** -- the same pixel values produce the exact same BlurHash string. Cached hashes remain valid.
 
 ---
 
@@ -232,19 +221,24 @@ node -e "const b = require('.'); console.log('OK')"
 ```
 blurhash-rs/
   crates/
-    blurhash-core/       # Pure Rust implementation (no dependencies)
+    blurhash-core/       # Pure Rust implementation (thiserror is the only dependency)
       src/
         lib.rs           # Public API re-exports
-        encode.rs        # BlurHash encoding (DCT + base83)
-        decode.rs        # BlurHash decoding (base83 + inverse DCT)
+        encode_impl.rs   # BlurHash encoding (DCT + base83)
+        decode_impl.rs   # BlurHash decoding (base83 + inverse DCT)
         base83.rs        # Base83 encoding/decoding
         color.rs         # sRGB <-> linear color space conversion
         error.rs         # Error types
+      benches/
+        blurhash_bench.rs  # Criterion benchmarks
+      tests/
+        integration_tests.rs
   bindings/
     python/              # PyO3 + maturin bindings
-    typescript/          # napi-rs bindings
-  benchmarks/            # Performance benchmarks
+    typescript/          # napi-rs bindings (N-API via napi-rs)
+  benchmarks/            # Cross-language performance comparison scripts
   reference/             # Original Python source for comparison
+  docs/                  # Architecture and design documents
 ```
 
 ---
@@ -254,6 +248,13 @@ blurhash-rs/
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and PR guidelines.
 
 ---
+
+## Acknowledgements
+
+- The [BlurHash algorithm](https://blurha.sh/) was created by [Dag Agren](https://github.com/DagAgren) at [Wolt](https://github.com/woltapp/blurhash) and is licensed under the MIT License (Copyright 2018 Wolt Enterprises).
+- The Python reference implementation is [blurhash-python](https://github.com/halcy/blurhash-python) by Lorenz Diener, also MIT licensed.
+
+This project is an independent Rust implementation of the BlurHash algorithm, not affiliated with Wolt.
 
 ## License
 

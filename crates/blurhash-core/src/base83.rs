@@ -49,7 +49,15 @@ pub fn decode(base83_str: &str) -> Result<u64, BlurhashError> {
         if digit == 255 {
             return Err(BlurhashError::InvalidBase83Character(ch as char));
         }
-        value = value * 83 + digit as u64;
+        value = value
+            .checked_mul(83)
+            .and_then(|v| v.checked_add(digit as u64))
+            .ok_or_else(|| {
+                BlurhashError::EncodingError(format!(
+                    "base83 value overflow decoding {:?}",
+                    base83_str
+                ))
+            })?;
     }
     Ok(value)
 }
@@ -86,8 +94,8 @@ pub fn encode(value: u64, length: usize) -> Result<String, BlurhashError> {
         remaining /= 83;
         result[i] = ALPHABET[digit];
     }
-    // SAFETY: all bytes come from ALPHABET which is valid ASCII.
-    Ok(String::from_utf8(result).unwrap())
+    // SAFETY: all bytes come from ALPHABET which is valid ASCII, so this cannot fail.
+    Ok(unsafe { String::from_utf8_unchecked(result) })
 }
 
 #[cfg(test)]

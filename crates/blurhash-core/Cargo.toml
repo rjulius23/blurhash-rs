@@ -1,8 +1,15 @@
 [package]
 name = "blurhash-core"
 version = "0.1.0"
-edition = "2021"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
 description = "Fast BlurHash encoding/decoding in pure Rust"
+readme = "../../README.md"
+keywords = ["blurhash", "image", "placeholder", "blur", "encoding"]
+categories = ["multimedia::images", "encoding"]
 
 [dependencies]
 thiserror = "2"

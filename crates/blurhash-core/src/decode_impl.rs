@@ -68,6 +68,25 @@ pub fn decode(
     height: u32,
     punch: f64,
 ) -> Result<Vec<u8>, BlurhashError> {
+    if width == 0 || height == 0 {
+        return Err(BlurhashError::InvalidDimensions {
+            width,
+            height,
+            reason: "width and height must be > 0",
+        });
+    }
+
+    // Cap dimensions to prevent DoS via excessive memory allocation.
+    // 10000x10000x3 = 300 MB which is a reasonable upper bound.
+    const MAX_DIMENSION: u32 = 10_000;
+    if width > MAX_DIMENSION || height > MAX_DIMENSION {
+        return Err(BlurhashError::InvalidDimensions {
+            width,
+            height,
+            reason: "dimensions must be <= 10000",
+        });
+    }
+
     if blurhash.len() < 6 {
         return Err(BlurhashError::InvalidLength {
             expected: 6,
@@ -92,7 +111,7 @@ pub fn decode(
 
     // Decode DC component.
     let dc_value = base83::decode(&blurhash[2..6])?;
-    let dc_r = srgb_to_linear((dc_value >> 16) as u8);
+    let dc_r = srgb_to_linear(((dc_value >> 16) & 255) as u8);
     let dc_g = srgb_to_linear(((dc_value >> 8) & 255) as u8);
     let dc_b = srgb_to_linear((dc_value & 255) as u8);
 
@@ -146,10 +165,10 @@ pub fn decode(
             let mut pixel_g = 0.0f64;
             let mut pixel_b = 0.0f64;
 
-            for j in 0..size_y as usize {
-                let cy = cos_y[j][y];
-                for i in 0..size_x as usize {
-                    let basis = cos_x[i][x] * cy;
+            for (j, cos_y_row) in cos_y.iter().enumerate() {
+                let cy = cos_y_row[y];
+                for (i, cos_x_row) in cos_x.iter().enumerate() {
+                    let basis = cos_x_row[x] * cy;
                     let colour = &colours[i + j * size_x as usize];
                     pixel_r += colour[0] * basis;
                     pixel_g += colour[1] * basis;
@@ -255,10 +274,8 @@ mod tests {
         // "LEHV6nWB2yk8pyo0adR*.7kCMdnj" is a well-known BlurHash
         let pixels = decode("LEHV6nWB2yk8pyo0adR*.7kCMdnj", 4, 4, 1.0).unwrap();
         assert_eq!(pixels.len(), 4 * 4 * 3);
-        // Verify pixels are in valid range
-        for &p in &pixels {
-            assert!(p <= 255);
-        }
+        // Verify decode produced non-trivial output (not all zeros)
+        assert!(pixels.iter().any(|&p| p > 0));
     }
 
     #[test]
