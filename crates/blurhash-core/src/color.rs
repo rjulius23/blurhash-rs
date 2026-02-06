@@ -1,7 +1,7 @@
 //! Color space conversion utilities for sRGB and linear RGB.
 //!
-//! Provides fast sRGB-to-linear and linear-to-sRGB conversions using a
-//! precomputed lookup table for the sRGB-to-linear direction.
+//! Provides fast sRGB-to-linear and linear-to-sRGB conversions using
+//! precomputed lookup tables for both directions.
 
 /// Precomputed lookup table mapping sRGB byte values (0..=255) to linear RGB (0.0..=1.0).
 /// Computed at compile time for zero runtime cost.
@@ -15,6 +15,18 @@ const fn build_srgb_to_linear_lut() -> [f64; 256] {
         } else {
             const_powf((value + 0.055) / 1.055, 2.4)
         };
+        i += 1;
+    }
+    lut
+}
+
+/// Build f32 version of sRGB-to-linear LUT for use in optimized paths.
+const fn build_srgb_to_linear_lut_f32() -> [f32; 256] {
+    let lut64 = build_srgb_to_linear_lut();
+    let mut lut = [0.0f32; 256];
+    let mut i = 0;
+    while i < 256 {
+        lut[i] = lut64[i] as f32;
         i += 1;
     }
     lut
@@ -70,8 +82,11 @@ const fn const_nth_root(value: f64, n: u32) -> f64 {
     x
 }
 
-/// Precomputed sRGB-to-linear lookup table.
+/// Precomputed sRGB-to-linear lookup table (f64).
 static SRGB_TO_LINEAR_LUT: [f64; 256] = build_srgb_to_linear_lut();
+
+/// Precomputed sRGB-to-linear lookup table (f32).
+static SRGB_TO_LINEAR_LUT_F32: [f32; 256] = build_srgb_to_linear_lut_f32();
 
 /// Convert an sRGB byte value (0..=255) to linear RGB (0.0..=1.0).
 ///
@@ -87,6 +102,15 @@ static SRGB_TO_LINEAR_LUT: [f64; 256] = build_srgb_to_linear_lut();
 #[inline]
 pub fn srgb_to_linear(value: u8) -> f64 {
     SRGB_TO_LINEAR_LUT[value as usize]
+}
+
+/// Convert an sRGB byte value (0..=255) to linear RGB as f32 (0.0..=1.0).
+///
+/// Uses a precomputed lookup table for O(1) performance.
+#[inline]
+pub fn srgb_to_linear_f32(value: u8) -> f32 {
+    // SAFETY: value is u8, always in 0..256, so index is always valid.
+    unsafe { *SRGB_TO_LINEAR_LUT_F32.get_unchecked(value as usize) }
 }
 
 /// Size of the linear-to-sRGB lookup table. 4096 entries provide sufficient
@@ -153,6 +177,18 @@ pub fn linear_to_srgb(value: f64) -> u8 {
     LINEAR_TO_SRGB_LUT[index.min(LINEAR_TO_SRGB_LUT_SIZE - 1)]
 }
 
+/// Convert a linear RGB f32 value to an sRGB byte value (0..=255).
+///
+/// Uses the precomputed lookup table. Values outside [0.0, 1.0] are clamped.
+#[inline]
+pub fn linear_to_srgb_f32(value: f32) -> u8 {
+    let clamped = value.clamp(0.0, 1.0);
+    let index = (clamped * (LINEAR_TO_SRGB_LUT_SIZE as f32 - 1.0) + 0.5) as usize;
+    // SAFETY: clamped is in [0.0, 1.0], so index is in [0, LINEAR_TO_SRGB_LUT_SIZE-1].
+    // The +0.5 rounding and clamp guarantee the index is in-bounds.
+    unsafe { *LINEAR_TO_SRGB_LUT.get_unchecked(index.min(LINEAR_TO_SRGB_LUT_SIZE - 1)) }
+}
+
 /// Compute `sign(value) * |value|^exp`.
 ///
 /// This preserves the sign of the input while raising the absolute value
@@ -168,6 +204,21 @@ pub fn linear_to_srgb(value: f64) -> u8 {
 #[inline]
 pub fn sign_pow(value: f64, exp: f64) -> f64 {
     value.abs().powf(exp).copysign(value)
+}
+
+/// Fast sign_pow for f32. Uses specialized paths for common exponents.
+#[inline(always)]
+pub fn sign_pow_f32(value: f32, exp: f32) -> f32 {
+    let abs_val = value.abs();
+    let result = if exp == 0.5 {
+        abs_val.sqrt()
+    } else if exp == 2.0 {
+        abs_val * abs_val
+    } else {
+        // For the general case, use f32 powf.
+        abs_val.powf(exp)
+    };
+    result.copysign(value)
 }
 
 #[cfg(test)]
@@ -245,5 +296,25 @@ mod tests {
             assert!(curr > prev, "not monotonic at {i}: {prev} >= {curr}");
             prev = curr;
         }
+    }
+
+    #[test]
+    fn test_f32_roundtrip_srgb() {
+        for i in 0..=255u8 {
+            let linear = srgb_to_linear_f32(i);
+            let back = linear_to_srgb_f32(linear);
+            assert!(
+                (i as i16 - back as i16).unsigned_abs() <= 1,
+                "f32 roundtrip failed for {i}: got {back}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_sign_pow_f32() {
+        assert!((sign_pow_f32(4.0, 0.5) - 2.0).abs() < 1e-5);
+        assert!((sign_pow_f32(-4.0, 0.5) - (-2.0)).abs() < 1e-5);
+        assert!((sign_pow_f32(3.0, 2.0) - 9.0).abs() < 1e-5);
+        assert!((sign_pow_f32(-3.0, 2.0) - (-9.0)).abs() < 1e-5);
     }
 }

@@ -1,13 +1,24 @@
 //! BlurHash decoding: convert a BlurHash string back into an RGB image.
 //!
 //! The decoder parses the base83-encoded BlurHash string, extracts the DCT
-//! components, and reconstructs an image of the specified dimensions.
+//! components, and reconstructs an image of the specified dimensions using a
+//! separable inverse DCT (two 1D passes) for much better performance.
+//!
+//! When the `parallel` feature is enabled, large images are decoded using
+//! rayon's work-stealing thread pool for improved throughput.
 
-use std::f64::consts::PI;
+use std::f32::consts::PI;
+
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
 
 use crate::base83;
-use crate::color::{linear_to_srgb, sign_pow, srgb_to_linear};
+use crate::color::{linear_to_srgb_f32, sign_pow_f32, srgb_to_linear_f32};
 use crate::error::BlurhashError;
+
+/// Minimum number of output pixels (width * height) before we use parallel decoding.
+#[cfg(feature = "parallel")]
+const PARALLEL_PIXEL_THRESHOLD: usize = 4096; // ~64x64
 
 /// Extract the number of X and Y components from a BlurHash string.
 ///
@@ -107,79 +118,188 @@ pub fn decode(
     }
 
     let quant_max_value = base83::decode(&blurhash[1..2])?;
-    let real_max_value = (quant_max_value as f64 + 1.0) / 166.0 * punch;
+    let real_max_value = (quant_max_value as f32 + 1.0) / 166.0 * punch as f32;
 
     // Decode DC component.
     let dc_value = base83::decode(&blurhash[2..6])?;
-    let dc_r = srgb_to_linear(((dc_value >> 16) & 255) as u8);
-    let dc_g = srgb_to_linear(((dc_value >> 8) & 255) as u8);
-    let dc_b = srgb_to_linear((dc_value & 255) as u8);
+    let dc_r = srgb_to_linear_f32(((dc_value >> 16) & 255) as u8);
+    let dc_g = srgb_to_linear_f32(((dc_value >> 8) & 255) as u8);
+    let dc_b = srgb_to_linear_f32((dc_value & 255) as u8);
 
-    let num_components = (size_x * size_y) as usize;
-    let mut colours: Vec<[f64; 3]> = Vec::with_capacity(num_components);
-    colours.push([dc_r, dc_g, dc_b]);
+    let sx = size_x as usize;
+    let sy = size_y as usize;
+    let num_components = sx * sy;
 
-    // Decode AC components.
+    // Store colours as flat [f32; 3] arrays.
+    // colours[idx] = [r, g, b] for component idx = i + j * size_x.
+    let mut colours = vec![[0.0f32; 3]; num_components];
+    colours[0] = [dc_r, dc_g, dc_b];
+
+    // Decode AC components using fast f32 sign_pow (x*x path for exp=2.0).
     for component_idx in 1..num_components {
         let start = 4 + component_idx * 2;
         let ac_value = base83::decode(&blurhash[start..start + 2])?;
 
-        let quant_r = (ac_value / (19 * 19)) as f64;
-        let quant_g = ((ac_value / 19) % 19) as f64;
-        let quant_b = (ac_value % 19) as f64;
+        let quant_r = (ac_value / (19 * 19)) as f32;
+        let quant_g = ((ac_value / 19) % 19) as f32;
+        let quant_b = (ac_value % 19) as f32;
 
-        colours.push([
-            sign_pow((quant_r - 9.0) / 9.0, 2.0) * real_max_value,
-            sign_pow((quant_g - 9.0) / 9.0, 2.0) * real_max_value,
-            sign_pow((quant_b - 9.0) / 9.0, 2.0) * real_max_value,
-        ]);
+        colours[component_idx] = [
+            sign_pow_f32((quant_r - 9.0) / 9.0, 2.0) * real_max_value,
+            sign_pow_f32((quant_g - 9.0) / 9.0, 2.0) * real_max_value,
+            sign_pow_f32((quant_b - 9.0) / 9.0, 2.0) * real_max_value,
+        ];
     }
 
     let w = width as usize;
     let h = height as usize;
-    let wf = width as f64;
-    let hf = height as f64;
+    let wf = width as f32;
+    let hf = height as f32;
 
-    // Precompute cosine tables.
-    let cos_x: Vec<Vec<f64>> = (0..size_x as usize)
-        .map(|i| {
-            (0..w)
-                .map(|x| (PI * x as f64 * i as f64 / wf).cos())
-                .collect()
-        })
-        .collect();
-    let cos_y: Vec<Vec<f64>> = (0..size_y as usize)
-        .map(|j| {
-            (0..h)
-                .map(|y| (PI * y as f64 * j as f64 / hf).cos())
-                .collect()
-        })
-        .collect();
-
-    // Reconstruct the image.
-    let mut result = vec![0u8; w * h * 3];
-
-    for y in 0..h {
+    // Precompute cosine tables as flat arrays for cache-friendly access.
+    // cos_x_table[i * w + x] = cos(PI * x * i / width)
+    let mut cos_x_table = vec![0.0f32; sx * w];
+    for i in 0..sx {
+        let base = i * w;
         for x in 0..w {
-            let mut pixel_r = 0.0f64;
-            let mut pixel_g = 0.0f64;
-            let mut pixel_b = 0.0f64;
+            // SAFETY: base + x = i * w + x < sx * w, always in bounds.
+            unsafe {
+                *cos_x_table.get_unchecked_mut(base + x) =
+                    (PI * x as f32 * i as f32 / wf).cos();
+            }
+        }
+    }
 
-            for (j, cos_y_row) in cos_y.iter().enumerate() {
-                let cy = cos_y_row[y];
-                for (i, cos_x_row) in cos_x.iter().enumerate() {
-                    let basis = cos_x_row[x] * cy;
-                    let colour = &colours[i + j * size_x as usize];
-                    pixel_r += colour[0] * basis;
-                    pixel_g += colour[1] * basis;
-                    pixel_b += colour[2] * basis;
+    // cos_y_table[j * h + y] = cos(PI * y * j / height)
+    let mut cos_y_table = vec![0.0f32; sy * h];
+    for j in 0..sy {
+        let base = j * h;
+        for y in 0..h {
+            // SAFETY: base + y = j * h + y < sy * h, always in bounds.
+            unsafe {
+                *cos_y_table.get_unchecked_mut(base + y) =
+                    (PI * y as f32 * j as f32 / hf).cos();
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Separable inverse DCT
+    // -----------------------------------------------------------------------
+    // Step 1: For each component row j, compute partial sums over x for each pixel column x.
+    //   partial[j * w + x] = sum_i(colours[j * sx + i] * cos_x[i * w + x])
+    // This gives us partial_r, partial_g, partial_b, each [sy][w].
+    let mut partial_r = vec![0.0f32; sy * w];
+    let mut partial_g = vec![0.0f32; sy * w];
+    let mut partial_b = vec![0.0f32; sy * w];
+
+    for j in 0..sy {
+        let colour_row_base = j * sx;
+        let partial_row_base = j * w;
+        for x in 0..w {
+            let mut sr = 0.0f32;
+            let mut sg = 0.0f32;
+            let mut sb = 0.0f32;
+            for i in 0..sx {
+                // SAFETY: i * w + x < sx * w; colour_row_base + i < sy * sx = num_components.
+                unsafe {
+                    let cos_val = *cos_x_table.get_unchecked(i * w + x);
+                    let colour = *colours.get_unchecked(colour_row_base + i);
+                    sr += colour[0] * cos_val;
+                    sg += colour[1] * cos_val;
+                    sb += colour[2] * cos_val;
                 }
             }
+            // SAFETY: partial_row_base + x = j * w + x < sy * w.
+            unsafe {
+                *partial_r.get_unchecked_mut(partial_row_base + x) = sr;
+                *partial_g.get_unchecked_mut(partial_row_base + x) = sg;
+                *partial_b.get_unchecked_mut(partial_row_base + x) = sb;
+            }
+        }
+    }
 
-            let idx = (y * w + x) * 3;
-            result[idx] = linear_to_srgb(pixel_r);
-            result[idx + 1] = linear_to_srgb(pixel_g);
-            result[idx + 2] = linear_to_srgb(pixel_b);
+    // Step 2: For each pixel (x, y), accumulate over j:
+    //   pixel[y][x] = sum_j(partial[j][x] * cos_y[j * h + y])
+    // Then convert linear -> sRGB.
+    let mut result = vec![0u8; w * h * 3];
+
+    // Pre-gather cos_y values per row for SIMD-friendly access.
+    // cos_y_per_row[y * sy + j] = cos_y_table[j * h + y]
+    #[cfg(feature = "simd")]
+    let cos_y_per_row: Vec<f32> = {
+        let mut table = vec![0.0f32; h * sy];
+        for y in 0..h {
+            for j in 0..sy {
+                table[y * sy + j] = cos_y_table[j * h + y];
+            }
+        }
+        table
+    };
+
+    let decode_row = |y: usize, row: &mut [u8]| {
+        #[cfg(feature = "simd")]
+        {
+            let cos_y_vals = &cos_y_per_row[y * sy..(y + 1) * sy];
+            crate::simd::decode_accumulate_row(
+                cos_y_vals,
+                &partial_r,
+                &partial_g,
+                &partial_b,
+                w,
+                sy,
+                row,
+                linear_to_srgb_f32,
+            );
+        }
+
+        #[cfg(not(feature = "simd"))]
+        {
+            for x in 0..w {
+                let mut pr = 0.0f32;
+                let mut pg = 0.0f32;
+                let mut pb = 0.0f32;
+                for j in 0..sy {
+                    // SAFETY: j * h + y < sy * h; j * w + x < sy * w.
+                    unsafe {
+                        let cos_y_val = *cos_y_table.get_unchecked(j * h + y);
+                        let partial_idx = j * w + x;
+                        pr += cos_y_val * *partial_r.get_unchecked(partial_idx);
+                        pg += cos_y_val * *partial_g.get_unchecked(partial_idx);
+                        pb += cos_y_val * *partial_b.get_unchecked(partial_idx);
+                    }
+                }
+                let idx = x * 3;
+                // SAFETY: idx + 2 = x * 3 + 2 < w * 3 = row.len().
+                unsafe {
+                    *row.get_unchecked_mut(idx) = linear_to_srgb_f32(pr);
+                    *row.get_unchecked_mut(idx + 1) = linear_to_srgb_f32(pg);
+                    *row.get_unchecked_mut(idx + 2) = linear_to_srgb_f32(pb);
+                }
+            }
+        }
+    };
+
+    let row_bytes = w * 3;
+
+    #[cfg(feature = "parallel")]
+    {
+        if w * h >= PARALLEL_PIXEL_THRESHOLD {
+            result
+                .par_chunks_mut(row_bytes)
+                .enumerate()
+                .for_each(|(y, row)| decode_row(y, row));
+        } else {
+            for (y, row) in result.chunks_mut(row_bytes).enumerate() {
+                decode_row(y, row);
+            }
+        }
+    }
+
+    #[cfg(not(feature = "parallel"))]
+    {
+        for (y, row) in result.chunks_mut(row_bytes).enumerate() {
+            decode_row(y, row);
         }
     }
 

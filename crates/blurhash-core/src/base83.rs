@@ -98,6 +98,61 @@ pub fn encode(value: u64, length: usize) -> Result<String, BlurhashError> {
     Ok(unsafe { String::from_utf8_unchecked(result) })
 }
 
+/// Encode an integer into a base83 string, writing directly into a byte buffer.
+///
+/// Writes `length` ASCII bytes starting at `buf[offset]`. Returns the new
+/// offset (`offset + length`) for chaining.
+///
+/// # Panics
+///
+/// Panics in debug mode if the buffer is too small or the value overflows.
+#[inline(always)]
+pub(crate) fn encode_to_buf(value: u64, length: usize, buf: &mut [u8], offset: usize) -> usize {
+    debug_assert!(
+        offset + length <= buf.len(),
+        "base83 encode_to_buf: buffer too small"
+    );
+    // Specialized paths for the exact lengths used in BlurHash encoding.
+    // These avoid the loop and let the compiler optimize to straight-line code.
+    unsafe {
+        match length {
+            1 => {
+                debug_assert!(value < 83);
+                *buf.get_unchecked_mut(offset) = *ALPHABET.get_unchecked(value as usize);
+            }
+            2 => {
+                debug_assert!(value < 83 * 83);
+                let d1 = (value % 83) as usize;
+                let d0 = (value / 83) as usize;
+                *buf.get_unchecked_mut(offset) = *ALPHABET.get_unchecked(d0);
+                *buf.get_unchecked_mut(offset + 1) = *ALPHABET.get_unchecked(d1);
+            }
+            4 => {
+                debug_assert!(value < 83 * 83 * 83 * 83);
+                let d3 = (value % 83) as usize;
+                let rem = value / 83;
+                let d2 = (rem % 83) as usize;
+                let rem = rem / 83;
+                let d1 = (rem % 83) as usize;
+                let d0 = (rem / 83) as usize;
+                *buf.get_unchecked_mut(offset) = *ALPHABET.get_unchecked(d0);
+                *buf.get_unchecked_mut(offset + 1) = *ALPHABET.get_unchecked(d1);
+                *buf.get_unchecked_mut(offset + 2) = *ALPHABET.get_unchecked(d2);
+                *buf.get_unchecked_mut(offset + 3) = *ALPHABET.get_unchecked(d3);
+            }
+            _ => {
+                let mut remaining = value;
+                for i in (offset..offset + length).rev() {
+                    let digit = (remaining % 83) as usize;
+                    remaining /= 83;
+                    *buf.get_unchecked_mut(i) = *ALPHABET.get_unchecked(digit);
+                }
+            }
+        }
+    }
+    offset + length
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -165,5 +220,34 @@ mod tests {
             let s = String::from(ch as char);
             assert_eq!(decode(&s).unwrap(), i as u64);
         }
+    }
+
+    #[test]
+    fn test_encode_to_buf_matches_encode() {
+        let mut buf = [0u8; 16];
+        for &(value, length) in &[(0u64, 1), (82, 1), (0, 4), (1, 4), (83 * 83 - 1, 2)] {
+            let expected = encode(value, length).unwrap();
+            let end = encode_to_buf(value, length, &mut buf, 0);
+            assert_eq!(end, length);
+            assert_eq!(
+                std::str::from_utf8(&buf[..length]).unwrap(),
+                expected.as_str(),
+                "mismatch for value={value}, length={length}"
+            );
+        }
+    }
+
+    #[test]
+    fn test_encode_to_buf_chaining() {
+        let mut buf = [0u8; 8];
+        let mut offset = 0;
+        offset = encode_to_buf(21, 1, &mut buf, offset); // size flag
+        offset = encode_to_buf(5, 1, &mut buf, offset); // quant_max_ac
+        offset = encode_to_buf(123456, 4, &mut buf, offset); // DC
+        assert_eq!(offset, 6);
+        // Verify each segment matches individual encode
+        assert_eq!(std::str::from_utf8(&buf[0..1]).unwrap(), encode(21, 1).unwrap());
+        assert_eq!(std::str::from_utf8(&buf[1..2]).unwrap(), encode(5, 1).unwrap());
+        assert_eq!(std::str::from_utf8(&buf[2..6]).unwrap(), encode(123456, 4).unwrap());
     }
 }

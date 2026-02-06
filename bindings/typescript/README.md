@@ -57,31 +57,31 @@ Node.js 18+ required. No Rust toolchain needed for installation.
 ### TypeScript
 
 ```typescript
-import { encode, decode, components } from 'blurhash-rs';
+import { encode, decode, getComponents } from 'blurhash-rs';
 
-// Encode: flat Uint8Array of RGB pixel data (width * height * 3 bytes)
-const pixels = new Uint8Array(width * height * 3);
+// Encode: Buffer of RGB pixel data (width * height * 3 bytes)
+const pixels = Buffer.alloc(width * height * 3);
 // ... fill with RGB pixel data ...
 const hash = encode(pixels, width, height, 4, 4);
 console.log(`BlurHash: ${hash}`);
 
-// Decode: returns Uint8Array of RGB pixel data
+// Decode: returns Buffer of RGB pixel data
 const decoded = decode(hash, 32, 32, 1.0);
 // decoded.length === 32 * 32 * 3
 
 // Get component counts from an existing hash
-const { x, y } = components(hash);
-console.log(`Components: ${x}x${y}`);
+const { componentsX, componentsY } = getComponents(hash);
+console.log(`Components: ${componentsX}x${componentsY}`);
 ```
 
 ### JavaScript (CommonJS)
 
 ```javascript
-const { encode, decode, components } = require('blurhash-rs');
+const { encode, decode, getComponents } = require('blurhash-rs');
 
 const hash = encode(pixelBuffer, 128, 128);
 const pixels = decode(hash, 32, 32);
-const { x, y } = components(hash);
+const { componentsX, componentsY } = getComponents(hash);
 ```
 
 ### With sharp (image processing)
@@ -98,7 +98,7 @@ async function imageToBlurHash(path: string): Promise<string> {
     .toBuffer({ resolveWithObject: true });
 
   // sharp outputs RGB buffer, exactly what blurhash-rs expects
-  return encode(new Uint8Array(data), info.width, info.height, 4, 4);
+  return encode(Buffer.from(data), info.width, info.height, 4, 4);
 }
 
 // Decode a BlurHash to a PNG placeholder
@@ -114,17 +114,17 @@ async function blurHashToImage(hash: string, width: number, height: number): Pro
 
 ## API Reference
 
-### `encode(pixels, width, height, componentX?, componentY?)`
+### `encode(data, width, height, componentsX?, componentsY?)`
 
 Encodes RGB pixel data into a BlurHash string.
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `pixels` | `Uint8Array` | (required) | Flat array of RGB pixel data. Length must be `width * height * 3`. |
+| `data` | `Buffer` | (required) | Raw RGB pixel data. Length must be `width * height * 3`. |
 | `width` | `number` | (required) | Image width in pixels. |
 | `height` | `number` | (required) | Image height in pixels. |
-| `componentX` | `number` | `4` | Horizontal component count (1-9). |
-| `componentY` | `number` | `4` | Vertical component count (1-9). |
+| `componentsX` | `number` | `4` | Horizontal component count (1-9). |
+| `componentsY` | `number` | `4` | Vertical component count (1-9). |
 
 **Returns:** `string` -- the BlurHash string.
 
@@ -143,13 +143,13 @@ Decodes a BlurHash string into RGB pixel data.
 | `height` | `number` | (required) | Output height in pixels. |
 | `punch` | `number` | `1.0` | Contrast factor. Higher = more vivid. |
 
-**Returns:** `Uint8Array` -- flat RGB pixel data, length `width * height * 3`.
+**Returns:** `Buffer` -- flat RGB pixel data, length `width * height * 3`.
 
 **Throws:** `Error` -- if the BlurHash string is invalid.
 
 ---
 
-### `components(blurhash)`
+### `getComponents(blurhash)`
 
 Extracts component counts from a BlurHash string.
 
@@ -157,9 +157,33 @@ Extracts component counts from a BlurHash string.
 |---|---|---|
 | `blurhash` | `string` | The BlurHash string to inspect. |
 
-**Returns:** `{ x: number, y: number }` -- the component counts.
+**Returns:** `{ componentsX: number, componentsY: number }` -- the component counts.
 
 **Throws:** `Error` -- if the BlurHash string is too short.
+
+---
+
+### `srgbToLinear(value)`
+
+Converts an sRGB byte value to linear RGB.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `value` | `number` | sRGB value in the range 0-255. |
+
+**Returns:** `number` -- linear RGB value in the range 0.0-1.0.
+
+---
+
+### `linearToSrgb(value)`
+
+Converts a linear RGB value to an sRGB byte value.
+
+| Parameter | Type | Description |
+|---|---|---|
+| `value` | `number` | Linear RGB value in the range 0.0-1.0. |
+
+**Returns:** `number` -- sRGB byte value in the range 0-255.
 
 ---
 
@@ -169,11 +193,11 @@ Full type declarations are included with the package (`index.d.ts`):
 
 ```typescript
 export function encode(
-  pixels: Uint8Array,
+  data: Buffer,
   width: number,
   height: number,
-  componentX?: number,
-  componentY?: number,
+  componentsX?: number,
+  componentsY?: number,
 ): string;
 
 export function decode(
@@ -181,9 +205,17 @@ export function decode(
   width: number,
   height: number,
   punch?: number,
-): Uint8Array;
+): Buffer;
 
-export function components(blurhash: string): { x: number; y: number };
+export interface Components {
+  componentsX: number;
+  componentsY: number;
+}
+
+export function getComponents(blurhash: string): Components;
+
+export function srgbToLinear(value: number): number;
+export function linearToSrgb(value: number): number;
 ```
 
 ---
@@ -194,7 +226,7 @@ If a prebuilt binary is not available for your platform:
 
 ```bash
 # Requires Rust toolchain (https://rustup.rs/) and Node.js 18+
-git clone https://github.com/anthropics/blurhash-rs
+git clone https://github.com/rjulius23/blurhash-rs
 cd blurhash-rs/bindings/typescript
 npm install
 npm run build

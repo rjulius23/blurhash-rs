@@ -10,5 +10,5 @@ name = "blurhash"
 crate-type = ["cdylib"]
 
 [dependencies]
-blurhash-core = { path = "../../crates/blurhash-core" }
+blurhash-core = { path = "../../crates/blurhash-core", features = ["parallel"] }
 pyo3 = { version = "0.23", features = ["extension-module"] }

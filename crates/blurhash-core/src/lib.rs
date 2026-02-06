@@ -27,8 +27,18 @@ pub mod error;
 mod decode_impl;
 mod encode_impl;
 
+#[cfg(feature = "simd")]
+#[allow(dead_code)]
+pub(crate) mod simd;
+
+#[cfg(feature = "gpu")]
+pub mod gpu;
+
 // Re-export primary functions at crate root.
-pub use color::{linear_to_srgb, sign_pow, srgb_to_linear};
+pub use color::{
+    linear_to_srgb, linear_to_srgb_f32, sign_pow, sign_pow_f32, srgb_to_linear,
+    srgb_to_linear_f32,
+};
 pub use decode_impl::{components, decode};
 pub use encode_impl::encode;
 pub use error::BlurhashError;

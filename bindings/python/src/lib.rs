@@ -18,16 +18,23 @@ fn to_py_err(e: blurhash_core::BlurhashError) -> PyErr {
 ///
 /// Returns:
 ///     The BlurHash string.
+///
+/// Note: Releases the GIL during computation for multi-threaded applications.
 #[pyfunction]
 #[pyo3(signature = (data, width, height, components_x = 4, components_y = 4))]
 fn encode(
+    py: Python<'_>,
     data: &[u8],
     width: u32,
     height: u32,
     components_x: u32,
     components_y: u32,
 ) -> PyResult<String> {
-    blurhash_core::encode(data, width, height, components_x, components_y).map_err(to_py_err)
+    // Copy data so we can release the GIL safely.
+    let data = data.to_vec();
+    py.allow_threads(move || {
+        blurhash_core::encode(&data, width, height, components_x, components_y).map_err(to_py_err)
+    })
 }
 
 /// Decode a BlurHash string into raw RGB pixel data.
@@ -40,6 +47,8 @@ fn encode(
 ///
 /// Returns:
 ///     A bytes object of length width * height * 3 containing RGB pixel data.
+///
+/// Note: Releases the GIL during computation for multi-threaded applications.
 #[pyfunction]
 #[pyo3(signature = (blurhash, width, height, punch = 1.0))]
 fn decode(
@@ -49,7 +58,10 @@ fn decode(
     height: u32,
     punch: f64,
 ) -> PyResult<Py<PyBytes>> {
-    let pixels = blurhash_core::decode(blurhash, width, height, punch).map_err(to_py_err)?;
+    let blurhash = blurhash.to_owned();
+    let pixels = py.allow_threads(move || {
+        blurhash_core::decode(&blurhash, width, height, punch).map_err(to_py_err)
+    })?;
     Ok(PyBytes::new(py, &pixels).into())
 }
 
@@ -77,6 +89,84 @@ fn linear_to_srgb(value: f64) -> u8 {
     blurhash_core::color::linear_to_srgb(value)
 }
 
+/// Encode multiple images into BlurHash strings in one call.
+///
+/// Releases the GIL during the entire batch, allowing other Python threads to
+/// run while all images are being processed.
+///
+/// Args:
+///     items: A list of tuples, each containing (data, width, height, components_x, components_y).
+///         - data: Raw pixel bytes in RGB order.
+///         - width: Image width in pixels.
+///         - height: Image height in pixels.
+///         - components_x: Number of horizontal components (1..=9).
+///         - components_y: Number of vertical components (1..=9).
+///
+/// Returns:
+///     A list of BlurHash strings, one per input item.
+///
+/// Raises:
+///     ValueError: If any image fails to encode. The error message indicates
+///         which item (by index) caused the failure.
+#[pyfunction]
+fn encode_batch(
+    py: Python<'_>,
+    items: Vec<(Vec<u8>, u32, u32, u32, u32)>,
+) -> PyResult<Vec<String>> {
+    py.allow_threads(move || {
+        items
+            .iter()
+            .enumerate()
+            .map(|(i, (data, w, h, cx, cy))| {
+                blurhash_core::encode(data, *w, *h, *cx, *cy).map_err(|e| {
+                    PyValueError::new_err(format!("encode_batch item {}: {}", i, e))
+                })
+            })
+            .collect::<PyResult<Vec<String>>>()
+    })
+}
+
+/// Decode multiple BlurHash strings into raw RGB pixel data in one call.
+///
+/// Releases the GIL during the entire batch, allowing other Python threads to
+/// run while all hashes are being decoded.
+///
+/// Args:
+///     items: A list of tuples, each containing (blurhash, width, height, punch).
+///         - blurhash: The BlurHash string to decode.
+///         - width: Desired output width in pixels.
+///         - height: Desired output height in pixels.
+///         - punch: Contrast adjustment factor.
+///
+/// Returns:
+///     A list of bytes objects, each containing RGB pixel data for the
+///     corresponding input.
+///
+/// Raises:
+///     ValueError: If any hash fails to decode. The error message indicates
+///         which item (by index) caused the failure.
+#[pyfunction]
+fn decode_batch(
+    py: Python<'_>,
+    items: Vec<(String, u32, u32, f64)>,
+) -> PyResult<Vec<Py<PyBytes>>> {
+    let results = py.allow_threads(move || {
+        items
+            .iter()
+            .enumerate()
+            .map(|(i, (hash, w, h, punch))| {
+                blurhash_core::decode(hash, *w, *h, *punch).map_err(|e| {
+                    PyValueError::new_err(format!("decode_batch item {}: {}", i, e))
+                })
+            })
+            .collect::<PyResult<Vec<Vec<u8>>>>()
+    })?;
+    Ok(results
+        .iter()
+        .map(|pixels| PyBytes::new(py, pixels).into())
+        .collect())
+}
+
 /// High-performance BlurHash encoding and decoding (Rust-powered).
 #[pymodule]
 fn blurhash(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -85,5 +175,7 @@ fn blurhash(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(components, m)?)?;
     m.add_function(wrap_pyfunction!(srgb_to_linear, m)?)?;
     m.add_function(wrap_pyfunction!(linear_to_srgb, m)?)?;
+    m.add_function(wrap_pyfunction!(encode_batch, m)?)?;
+    m.add_function(wrap_pyfunction!(decode_batch, m)?)?;
     Ok(())
 }

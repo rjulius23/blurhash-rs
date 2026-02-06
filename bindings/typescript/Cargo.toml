@@ -9,7 +9,7 @@ publish = false
 crate-type = ["cdylib"]
 
 [dependencies]
-blurhash-core = { path = "../../crates/blurhash-core" }
+blurhash-core = { path = "../../crates/blurhash-core", features = ["parallel"] }
 napi = { version = "3", features = ["napi6"] }
 napi-derive = "3"
 

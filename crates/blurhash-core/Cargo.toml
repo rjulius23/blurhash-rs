@@ -11,8 +11,18 @@ readme = "../../README.md"
 keywords = ["blurhash", "image", "placeholder", "blur", "encoding"]
 categories = ["multimedia::images", "encoding"]
 
+[features]
+default = ["simd"]
+simd = []
+parallel = ["rayon"]
+gpu = ["wgpu", "pollster", "bytemuck"]
+
 [dependencies]
 thiserror = "2"
+rayon = { version = "1.10", optional = true }
+wgpu = { version = "24", optional = true }
+pollster = { version = "0.4", optional = true }
+bytemuck = { version = "1", features = ["derive"], optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }

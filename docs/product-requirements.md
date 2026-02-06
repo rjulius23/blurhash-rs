@@ -6,7 +6,7 @@ BlurHash is a compact representation of a placeholder for an image, widely used 
 
 **blurhash-rs** is a ground-up Rust port of the blurhash algorithm, distributed as:
 
-- A **Python package** (`pip install blurhash-rs`) via PyO3 + maturin, providing a drop-in replacement for `blurhash-python` with identical API signatures.
+- A **Python package** (`pip install blurhash-rust`) via PyO3 + maturin, providing a high-performance alternative to `blurhash-python` with a similar API using flat byte buffers for efficiency.
 - A **Node.js/TypeScript package** (`npm install blurhash-rs`) via napi-rs, giving the JavaScript ecosystem a high-performance native blurhash implementation.
 
 By moving the core computation to Rust, we target a **minimum 100x performance improvement** over the Python reference for both encode and decode operations. This unlocks use cases that are impractical today: real-time encoding in web servers, batch processing in image pipelines, and low-latency decoding in server-side rendering.
@@ -18,12 +18,12 @@ By moving the core computation to Rust, we target a **minimum 100x performance i
 ### Python Developers Migrating from blurhash-python
 
 **US-1: Drop-in replacement for existing Python code**
-> As a Python developer currently using `blurhash-python`, I want to switch to `blurhash-rs` by only changing my import statement, so that I get a massive performance improvement without rewriting any application code.
+> As a Python developer currently using `blurhash-python`, I want to switch to `blurhash-rust` by only changing my install, so that I get a massive performance improvement without rewriting any application code.
 
-Acceptance: `import blurhash_rs as blurhash` works as a drop-in replacement. All public functions (`blurhash_encode`, `blurhash_decode`, `blurhash_components`) accept the same arguments and return the same types as the original.
+Acceptance: `import blurhash` works after installing `blurhash-rust`. All public functions (`encode`, `decode`, `components`) accept flat RGB byte buffers and return the same hash strings as the original.
 
 **US-2: Identical output for existing workloads**
-> As a Python developer, I want `blurhash-rs` to produce byte-identical blurhash strings for the same input images, so that I can migrate without breaking cached hashes or visual regressions.
+> As a Python developer, I want `blurhash-rust` to produce byte-identical blurhash strings for the same input images, so that I can migrate without breaking cached hashes or visual regressions.
 
 Acceptance: Given the same pixel data, component counts, and parameters, the Rust port produces the exact same blurhash string as the Python reference implementation.
 
@@ -32,7 +32,7 @@ Acceptance: Given the same pixel data, component counts, and parameters, the Rus
 **US-3: Native npm package for Node.js**
 > As a Node.js developer building an image service, I want to `npm install blurhash-rs` and call `encode`/`decode` from TypeScript, so that I can generate blurhash placeholders on the server without spawning child processes or using slow JS implementations.
 
-Acceptance: The npm package exports `encode`, `decode`, and `components` functions callable from both JavaScript and TypeScript with full type definitions included.
+Acceptance: The npm package exports `encode`, `decode`, and `getComponents` functions callable from both JavaScript and TypeScript with full type definitions included.
 
 **US-4: TypeScript type safety**
 > As a TypeScript developer, I want the npm package to ship with `.d.ts` type declarations, so that I get autocomplete and compile-time type checking.
@@ -72,26 +72,27 @@ Acceptance: The Rust core has no third-party runtime dependencies. The Python wh
 
 ## 3. Acceptance Criteria
 
-### 3.1 API Compatibility (Python)
+### 3.1 API Surface (Python)
 
-| Python Reference Function | Signature | blurhash-rs Must Match |
+| Function | Signature | Description |
 |---|---|---|
-| `blurhash_encode(image, components_x=4, components_y=4, linear=False)` | Accepts 3D list of pixel values (height x width x 3), returns blurhash string | Identical signature, identical return value |
-| `blurhash_decode(blurhash, width, height, punch=1.0, linear=False)` | Accepts blurhash string and dimensions, returns 3D list of pixel values | Identical signature, identical return value |
-| `blurhash_components(blurhash)` | Accepts blurhash string, returns `(size_x, size_y)` tuple | Identical signature, identical return value |
+| `encode` | `encode(data: bytes, width: int, height: int, components_x: int = 4, components_y: int = 4) -> str` | Accepts flat RGB pixel bytes (length = width * height * 3), returns a BlurHash string. |
+| `decode` | `decode(blurhash: str, width: int, height: int, punch: float = 1.0) -> bytes` | Accepts a BlurHash string and dimensions, returns flat RGB pixel bytes. |
+| `components` | `components(blurhash: str) -> tuple[int, int]` | Accepts a BlurHash string, returns `(components_x, components_y)` tuple. |
 
-- All parameter names, default values, and types must match.
-- Error behavior must match: `ValueError` raised for the same invalid inputs (blurhash too short, invalid length, component counts out of 1-9 range).
+- The Python module is imported as `import blurhash` (the package is installed as `blurhash-rust` on PyPI).
+- Unlike `blurhash-python` which uses nested 3D lists, `blurhash-rust` uses flat byte buffers for performance.
+- Error behavior: `ValueError` raised for invalid inputs (blurhash too short, invalid length, component counts out of 1-9 range).
 
 ### 3.2 API Surface (Node.js / TypeScript)
 
 | Function | Signature |
 |---|---|
-| `encode(pixels: Uint8Array, width: number, height: number, componentX?: number, componentY?: number)` | Returns blurhash string |
-| `decode(blurhash: string, width: number, height: number, punch?: number)` | Returns `Uint8Array` of RGB pixel data |
-| `components(blurhash: string)` | Returns `{ x: number, y: number }` |
+| `encode(data: Buffer, width: number, height: number, componentsX?: number, componentsY?: number): string` | Encodes flat RGB pixel data into a BlurHash string. Defaults to 4x4 components. |
+| `decode(blurhash: string, width: number, height: number, punch?: number): Buffer` | Decodes a BlurHash string into flat RGB pixel data. Punch defaults to 1.0. |
+| `getComponents(blurhash: string): { componentsX: number, componentsY: number }` | Returns the component counts from a BlurHash string. |
 
-- The Node.js API uses flat `Uint8Array` buffers (standard for image data in JS) rather than nested arrays.
+- The Node.js API uses `Buffer` for pixel data (standard for binary data in Node.js).
 - TypeScript `.d.ts` declarations are included in the package.
 
 ### 3.3 Performance
@@ -107,15 +108,14 @@ Acceptance: The Rust core has no third-party runtime dependencies. The Python wh
 
 ### 3.4 Correctness
 
-- All blurhash strings produced by `blurhash_encode` for a given input must be **byte-identical** to the Python reference output.
-- All pixel arrays produced by `blurhash_decode` for a given blurhash must be **value-identical** to the Python reference output (integer RGB values match exactly).
-- The `blurhash_components` function returns identical tuples.
+- All blurhash strings produced by `encode` for a given input must be **byte-identical** to the Python reference output.
+- All pixel arrays produced by `decode` for a given blurhash must be **value-identical** to the Python reference output (integer RGB values match exactly).
+- The `components` function returns identical tuples.
 - Edge cases tested:
   - Minimum components (1x1)
   - Maximum components (9x9)
   - 1x1 pixel image
   - Non-square images (wide and tall aspect ratios)
-  - `linear=True` mode for both encode and decode
   - `punch` parameter values other than 1.0
   - Invalid inputs raise appropriate errors
 
@@ -123,13 +123,13 @@ Acceptance: The Rust core has no third-party runtime dependencies. The Python wh
 
 | Target | Package Name | Registry | Platforms |
 |---|---|---|---|
-| Python | `blurhash-rs` | PyPI | linux-x64, linux-arm64, macos-x64, macos-arm64, windows-x64 |
+| Python | `blurhash-rust` | PyPI | linux-x64, linux-arm64, macos-x64, macos-arm64, windows-x64 |
 | Node.js | `blurhash-rs` | npm | linux-x64, linux-arm64, macos-x64, macos-arm64, windows-x64 |
 
 - Python: maturin-built wheels, supporting Python 3.8+.
 - Node.js: napi-rs prebuilds, supporting Node.js 18+ (current LTS and later).
 - Source distributions available as fallback for unsupported platforms.
-- `pip install blurhash-rs` and `npm install blurhash-rs` work without a Rust toolchain.
+- `pip install blurhash-rust` and `npm install blurhash-rs` work without a Rust toolchain.
 
 ### 3.6 Quality
 
@@ -137,7 +137,7 @@ Acceptance: The Rust core has no third-party runtime dependencies. The Python wh
 - `cargo clippy` passes with no warnings.
 - `cargo test` passes with 100% of tests green.
 - Python tests run via `pytest` with a test suite covering all acceptance criteria.
-- Node.js tests run via a standard test runner (vitest or jest).
+- Node.js tests run via Node.js built-in test runner (`node --test`).
 
 ---
 
@@ -162,6 +162,6 @@ Acceptance: The Rust core has no third-party runtime dependencies. The Python wh
 | **napi-rs build complexity** across platforms | Medium -- npm install fails on some targets | Medium | Use napi-rs GitHub Actions matrix builds. Test all five platform targets in CI. Provide source-build fallback instructions. |
 | **PyO3/maturin ABI compatibility** with multiple Python versions | Medium -- wheels fail on older/newer Python | Low | Build wheels for Python 3.8-3.13 using maturin's abi3 stable ABI support, reducing the matrix to a single wheel per platform. |
 | **Performance target not met** on specific hardware | Medium -- marketing claim weakened | Low | The Python reference is extremely slow due to nested Python loops; even a naive Rust translation should exceed 100x. Profile and optimize hot loops (base83 encode/decode, DCT computation). Consider SIMD for the trigonometric inner loop if needed. |
-| **Name collision on PyPI/npm** | High -- cannot publish under desired name | Low | Check `blurhash-rs` availability on both registries early. Have fallback names ready (`blurhash-rust`, `blurhash-native`). |
+| **Name collision on PyPI/npm** | High -- cannot publish under desired name | Low | The Python package is published as `blurhash-rust` on PyPI (since `blurhash-rs` was taken). The npm package is published as `blurhash-rs`. |
 | **Thread-safety issues** in Python GIL release | High -- crashes in multi-threaded servers | Low | Ensure all Rust functions are `Send + Sync`. Test under concurrent load with Python `threading` and `concurrent.futures`. Use PyO3's `allow_threads` correctly. |
 | **Large binary size** in distributed wheels/prebuilds | Low -- slower install, larger containers | Medium | Use `opt-level = "z"` and `lto = true` in release profile. Strip debug symbols. Target < 2MB per platform binary. |

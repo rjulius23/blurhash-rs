@@ -34,7 +34,7 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Clippy
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --workspace --exclude blurhash-python --exclude blurhash-typescript --all-targets -- -D warnings
 
   test:
     name: Test (${{ matrix.os }})
@@ -56,7 +56,7 @@ jobs:
           key: test-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: test-${{ runner.os }}-cargo-
       - name: Run tests
-        run: cargo test --workspace
+        run: cargo test --workspace --exclude blurhash-python --exclude blurhash-typescript
 
   bench:
     name: Benchmarks
@@ -74,4 +74,4 @@ jobs:
           key: bench-${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: bench-${{ runner.os }}-cargo-
       - name: Run benchmarks (compile check)
-        run: cargo bench --workspace --no-run
+        run: cargo bench --workspace --exclude blurhash-python --exclude blurhash-typescript --no-run

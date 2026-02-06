@@ -4,7 +4,7 @@
 
 [![CI](https://github.com/rjulius23/blurhash-rs/actions/workflows/ci.yml/badge.svg)](https://github.com/rjulius23/blurhash-rs/actions/workflows/ci.yml)
 [![crates.io](https://img.shields.io/crates/v/blurhash-core.svg)](https://crates.io/crates/blurhash-core)
-[![PyPI](https://img.shields.io/pypi/v/blurhash-rs.svg)](https://pypi.org/project/blurhash-rs/)
+[![PyPI](https://img.shields.io/pypi/v/blurhash-rust.svg)](https://pypi.org/project/blurhash-rust/)
 [![npm](https://img.shields.io/npm/v/blurhash-rs.svg)](https://www.npmjs.com/package/blurhash-rs)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.70%2B-orange.svg)](https://www.rust-lang.org/)
@@ -18,9 +18,9 @@
 
 The widely-used Python implementation ([blurhash-python](https://github.com/halcy/blurhash-python)) is functionally correct but slow. Its nested Python loops over trigonometric calculations make it impractical for server-side use at any real scale.
 
-**blurhash-rs** rewrites the core algorithm in Rust with precomputed lookup tables, cache-friendly memory layout, and zero unsafe code -- then exposes it to Python and TypeScript as native packages. The result is an **up to 445x performance improvement** with zero API changes.
+**blurhash-rs** rewrites the core algorithm in Rust with precomputed lookup tables, cache-friendly memory layout, and zero unsafe code -- then exposes it to Python and TypeScript as native packages. The result is an **up to 445x performance improvement** with a minimal-migration API.
 
-### Performance (measured)
+### Performance vs blurhash-python (measured)
 
 | Operation | Python (blurhash-python) | Rust (blurhash-rs) | Speedup |
 |---|---|---|---|
@@ -34,6 +34,29 @@ The widely-used Python implementation ([blurhash-python](https://github.com/halc
 | sRGB LUT (256 values) | 37.3 µs | 133 ns | **280x** |
 
 > *Measured on Apple Silicon (aarch64). Python 3.14, Rust 1.93, single-threaded. Rust benchmarks via Criterion.rs. Run `cargo bench` to reproduce.*
+
+### Performance vs Zaczero's blurhash-rs (native Rust competitor)
+
+We also outperform [Zaczero's blurhash-rs](https://github.com/Zaczero/pkgs/tree/main/blurhash-rs) (`blurhash-rs` on PyPI), another Rust-based BlurHash implementation. On a **16.9-megapixel** image (5504x3072):
+
+| Metric | blurhash-rust (ours) | Zaczero's blurhash-rs |
+|---|---|---|
+| **Encode time** | 1,131 µs | 32,838 µs |
+| **Speedup** | **29x faster** | baseline |
+| Hash | `LH9jNDxb0dNGX4fkV@V@tPkBVrfi` | `LJA0d[s:0dV[X4j]i{axtPWoRObG` |
+
+The speed advantage comes from intelligent downsampling before DCT computation -- since BlurHash uses at most 9x9 components, processing every pixel is unnecessary. The quality impact is negligible for a blur placeholder:
+
+<p align="center">
+  <img src="docs/examples/original_200x200.png" width="200" alt="Original image" />
+  <img src="docs/examples/ours_preview.png" width="200" alt="Our BlurHash decode" />
+  <img src="docs/examples/zaczero_preview.png" width="200" alt="Zaczero BlurHash decode" />
+</p>
+<p align="center">
+  <em>Left: Original (resized) | Center: Our BlurHash (29x faster) | Right: Zaczero's BlurHash</em>
+</p>
+
+Decoded pixel difference: avg 6.7/255 (2.6%), max 48/255 -- imperceptible in a loading placeholder context.
 
 ---
 
@@ -51,7 +74,7 @@ blurhash-core = "0.1"
 ### Python
 
 ```bash
-pip install blurhash-rs
+pip install blurhash-rust
 ```
 
 Prebuilt wheels are available for Linux (x64, arm64), macOS (x64, arm64), and Windows (x64). Python 3.8+ required.
@@ -155,7 +178,7 @@ blurhash-rs provides a high-performance alternative to [blurhash-python](https:/
 
 ```bash
 pip uninstall blurhash-python
-pip install blurhash-rs
+pip install blurhash-rust
 ```
 
 ### Step 2: Update your code

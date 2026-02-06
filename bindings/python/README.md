@@ -1,8 +1,8 @@
-# blurhash-rs (Python)
+# blurhash-rust (Python)
 
-**Drop-in replacement for [blurhash-python](https://github.com/halcy/blurhash-python), 100x faster.**
+**High-performance BlurHash encoding and decoding, powered by Rust.**
 
-[![PyPI](https://img.shields.io/pypi/v/blurhash-rs.svg)](https://pypi.org/project/blurhash-rs/)
+[![PyPI](https://img.shields.io/pypi/v/blurhash-rust.svg)](https://pypi.org/project/blurhash-rust/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](../../LICENSE)
 [![Python](https://img.shields.io/badge/python-3.8%2B-blue.svg)](https://www.python.org/)
 
@@ -10,27 +10,14 @@
 
 ## What is this?
 
-`blurhash-rs` is a Rust-powered reimplementation of [blurhash-python](https://github.com/halcy/blurhash-python) that provides the **exact same API** with a **100x+ performance improvement**. It produces byte-identical output -- same inputs, same BlurHash strings, same decoded pixels.
-
-If you're using `blurhash-python` today, you can switch in under a minute with zero code changes.
-
-### Performance
-
-| Operation | blurhash-python | blurhash-rs | Speedup |
-|---|---|---|---|
-| Encode 128x128, 4x4 components | ~150 ms | ~0.8 ms | **187x** |
-| Encode 256x256, 4x4 components | ~580 ms | ~3.0 ms | **193x** |
-| Decode to 32x32 | ~12 ms | ~0.05 ms | **240x** |
-| Decode to 128x128 | ~180 ms | ~0.7 ms | **257x** |
-
-> *Measured on Apple M2, Python 3.12, single-threaded.*
+`blurhash-rust` is a Rust-powered Python package for [BlurHash](https://blurha.sh/) encoding and decoding. It provides a simple, fast API for generating compact BlurHash strings from raw pixel data and decoding them back to pixels.
 
 ---
 
 ## Installation
 
 ```bash
-pip install blurhash-rs
+pip install blurhash-rust
 ```
 
 Prebuilt wheels are available for:
@@ -50,73 +37,78 @@ Python 3.8+ required. No Rust toolchain needed for installation.
 ```python
 import blurhash
 
-# Encode an image to a BlurHash string
-# image is a 3D list: [height][width][r, g, b]
-image = [[[128, 64, 32] for x in range(100)] for y in range(100)]
-hash_str = blurhash.blurhash_encode(image, components_x=4, components_y=4)
+# Encode raw RGB pixel data into a BlurHash string
+# `data` must be a bytes object of length width * height * 3 (RGB)
+width, height = 100, 100
+pixel_data = bytes([128, 64, 32] * (width * height))
+
+hash_str = blurhash.encode(pixel_data, width, height, components_x=4, components_y=4)
 print(hash_str)  # e.g. "LEHV6nWB2yk8pyo0adR*.7kCMdnj"
 
-# Decode a BlurHash string back to pixels
-# Returns a 3D list: [height][width][r, g, b]
-pixels = blurhash.blurhash_decode(hash_str, width=32, height=32, punch=1.0)
+# Decode a BlurHash string back to raw RGB pixel data
+# Returns a bytes object of length width * height * 3
+raw_pixels = blurhash.decode(hash_str, width=32, height=32, punch=1.0)
+print(len(raw_pixels))  # 32 * 32 * 3 = 3072
 
 # Get the component counts from an existing hash
-size_x, size_y = blurhash.blurhash_components(hash_str)
-print(f"Components: {size_x}x{size_y}")
+components_x, components_y = blurhash.components(hash_str)
+print(f"Components: {components_x}x{components_y}")
 ```
 
-### Linear color space
-
-Both `blurhash_encode` and `blurhash_decode` accept a `linear` parameter. When set to `True`, the functions skip the sRGB-to-linear conversion (for encode) or the linear-to-sRGB conversion (for decode), useful when your pixel data is already in linear color space.
+### Working with images (Pillow)
 
 ```python
-# Input is already in linear color space
-hash_str = blurhash.blurhash_encode(linear_image, linear=True)
+from PIL import Image
+import blurhash
 
-# Get output in linear color space
-linear_pixels = blurhash.blurhash_decode(hash_str, 32, 32, linear=True)
+# Encode from a PIL Image
+img = Image.open("photo.jpg").convert("RGB")
+pixel_data = img.tobytes()
+hash_str = blurhash.encode(pixel_data, img.width, img.height)
+
+# Decode back to a PIL Image
+raw = blurhash.decode(hash_str, width=32, height=32)
+preview = Image.frombytes("RGB", (32, 32), raw)
+preview.save("preview.png")
 ```
 
-### Thread safety
-
-`blurhash-rs` releases the Python GIL during Rust computation, so it works safely and efficiently in multi-threaded applications:
+### Color space utilities
 
 ```python
-from concurrent.futures import ThreadPoolExecutor
+import blurhash
 
-with ThreadPoolExecutor(max_workers=8) as pool:
-    hashes = list(pool.map(
-        lambda img: blurhash.blurhash_encode(img),
-        images
-    ))
+# Convert between sRGB and linear color space
+linear = blurhash.srgb_to_linear(128)   # 0.2158...
+srgb = blurhash.linear_to_srgb(0.5)     # 188
 ```
 
 ---
 
 ## API Reference
 
-### `blurhash_encode(image, components_x=4, components_y=4, linear=False)`
+### `encode(data, width, height, components_x=4, components_y=4)`
 
-Encodes pixel data into a BlurHash string.
+Encodes raw RGB pixel data into a BlurHash string.
 
 **Parameters:**
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `image` | `list[list[list[int]]]` | (required) | 3D list of pixel values `[height][width][r, g, b]`. Values 0-255. |
+| `data` | `bytes` | (required) | Raw pixel bytes in RGB order. Length must be `width * height * 3`. |
+| `width` | `int` | (required) | Image width in pixels. |
+| `height` | `int` | (required) | Image height in pixels. |
 | `components_x` | `int` | `4` | Number of horizontal components (1-9). More = more detail. |
 | `components_y` | `int` | `4` | Number of vertical components (1-9). More = more detail. |
-| `linear` | `bool` | `False` | If `True`, input is treated as linear color space (skip sRGB conversion). |
 
 **Returns:** `str` -- the BlurHash string.
 
-**Raises:** `ValueError` -- if component counts are outside 1-9 range.
+**Raises:** `ValueError` -- if component counts are outside 1-9 range or data length does not match dimensions.
 
 ---
 
-### `blurhash_decode(blurhash, width, height, punch=1.0, linear=False)`
+### `decode(blurhash, width, height, punch=1.0)`
 
-Decodes a BlurHash string into pixel data.
+Decodes a BlurHash string into raw RGB pixel data.
 
 **Parameters:**
 
@@ -126,15 +118,14 @@ Decodes a BlurHash string into pixel data.
 | `width` | `int` | (required) | Output image width in pixels. |
 | `height` | `int` | (required) | Output image height in pixels. |
 | `punch` | `float` | `1.0` | Contrast adjustment. Higher values = more vivid colors. |
-| `linear` | `bool` | `False` | If `True`, return linear color space values (skip linear-to-sRGB conversion). |
 
-**Returns:** `list[list[list[int]]]` -- 3D list of pixel values `[height][width][r, g, b]`.
+**Returns:** `bytes` -- raw RGB pixel data of length `width * height * 3`.
 
 **Raises:** `ValueError` -- if the BlurHash string is invalid or too short.
 
 ---
 
-### `blurhash_components(blurhash)`
+### `components(blurhash)`
 
 Extracts the component counts from a BlurHash string.
 
@@ -144,35 +135,71 @@ Extracts the component counts from a BlurHash string.
 |---|---|---|
 | `blurhash` | `str` | The BlurHash string to inspect. |
 
-**Returns:** `tuple[int, int]` -- `(size_x, size_y)` component counts.
+**Returns:** `tuple[int, int]` -- `(components_x, components_y)` component counts.
 
-**Raises:** `ValueError` -- if the BlurHash string is too short (< 6 characters).
+**Raises:** `ValueError` -- if the BlurHash string is too short.
 
 ---
 
-## Migrating from blurhash-python
+### `srgb_to_linear(value)`
 
-### Step 1: Swap the package
+Converts an sRGB byte value to linear RGB.
 
-```bash
-pip uninstall blurhash-python
-pip install blurhash-rs
-```
+**Parameters:**
 
-### Step 2: Done
+| Parameter | Type | Description |
+|---|---|---|
+| `value` | `int` | sRGB value (0-255). |
 
-No code changes needed. The module name (`blurhash`), function names, parameter names, default values, and return types are all identical.
+**Returns:** `float` -- linear RGB value (0.0-1.0).
+
+---
+
+### `linear_to_srgb(value)`
+
+Converts a linear RGB value to an sRGB byte.
+
+**Parameters:**
+
+| Parameter | Type | Description |
+|---|---|---|
+| `value` | `float` | Linear RGB value (0.0-1.0). |
+
+**Returns:** `int` -- sRGB value (0-255).
+
+---
+
+## Differences from blurhash-python
+
+This package is **not** a drop-in replacement for [blurhash-python](https://github.com/halcy/blurhash-python). The API differs in several ways:
+
+| | blurhash-python | blurhash-rust |
+|---|---|---|
+| **Encode function** | `blurhash_encode(image)` | `encode(data, width, height)` |
+| **Decode function** | `blurhash_decode(hash, w, h)` | `decode(hash, w, h)` |
+| **Components function** | `blurhash_components(hash)` | `components(hash)` |
+| **Encode input** | 3D list `[h][w][r,g,b]` | flat `bytes` (RGB) |
+| **Decode output** | 3D list `[h][w][r,g,b]` | flat `bytes` (RGB) |
+| **Linear mode** | `linear=True` parameter | Use `srgb_to_linear()` / `linear_to_srgb()` utilities |
+
+### Migrating from blurhash-python
 
 ```python
-# Your existing code works unchanged
+# Before (blurhash-python):
 import blurhash
-
-hash_str = blurhash.blurhash_encode(image)
-pixels = blurhash.blurhash_decode(hash_str, 32, 32)
+hash_str = blurhash.blurhash_encode(image_3d_list, components_x=4, components_y=4)
+pixels_3d = blurhash.blurhash_decode(hash_str, 32, 32)
 x, y = blurhash.blurhash_components(hash_str)
-```
 
-**Compatibility guarantee:** Given the same input, `blurhash-rs` produces byte-identical BlurHash strings and value-identical decoded pixels as `blurhash-python`. Your cached hashes remain valid.
+# After (blurhash-rust):
+import blurhash
+# Convert 3D list to flat bytes for encode
+flat = bytes(c for row in image_3d_list for pixel in row for c in pixel)
+hash_str = blurhash.encode(flat, width, height, components_x=4, components_y=4)
+# decode returns flat bytes instead of 3D list
+raw = blurhash.decode(hash_str, 32, 32)
+x, y = blurhash.components(hash_str)
+```
 
 ---
 
@@ -183,7 +210,7 @@ If a prebuilt wheel is not available for your platform:
 ```bash
 # Requires Rust toolchain (https://rustup.rs/)
 pip install maturin
-git clone https://github.com/anthropics/blurhash-rs
+git clone https://github.com/rjulius23/blurhash-rs
 cd blurhash-rs/bindings/python
 maturin build --release
 pip install target/wheels/*.whl

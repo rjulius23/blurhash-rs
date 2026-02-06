@@ -5,6 +5,31 @@
   "main": "index.js",
   "types": "index.d.ts",
   "license": "MIT",
+  "author": "rjulius23",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rjulius23/blurhash-rs.git",
+    "directory": "bindings/typescript"
+  },
+  "homepage": "https://github.com/rjulius23/blurhash-rs#readme",
+  "bugs": {
+    "url": "https://github.com/rjulius23/blurhash-rs/issues"
+  },
+  "keywords": [
+    "blurhash",
+    "image",
+    "placeholder",
+    "blur",
+    "encoding",
+    "decoding",
+    "rust",
+    "napi",
+    "native",
+    "performance"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
   "napi": {
     "name": "blurhash-rs",
     "triples": {
@@ -29,6 +54,7 @@
   },
   "files": [
     "index.js",
-    "index.d.ts"
+    "index.d.ts",
+    "README.md"
   ]
 }
