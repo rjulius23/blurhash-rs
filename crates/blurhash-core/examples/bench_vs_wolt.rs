@@ -73,7 +73,7 @@ fn main() {
     println!("\n--- DECODE ---");
     let small = gradient_image(32, 32);
     let hash43 = encode(&small, 32, 32, 4, 3).unwrap();
-    let hash99 = encode(&small, 32, 32, 9, 9).unwrap();
+    let _hash99 = encode(&small, 32, 32, 9, 9).unwrap();
 
     for &(w, h) in &[(32u32, 32), (128, 128), (256, 256)] {
         let iters = if w <= 32 {
