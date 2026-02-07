@@ -54,12 +54,7 @@ pub fn encode_from_uint8_array(
 /// @param punch - Contrast adjustment factor (default 1.0).
 /// @returns A Buffer of length width * height * 3 containing RGB pixel data.
 #[napi]
-pub fn decode(
-    blurhash: String,
-    width: u32,
-    height: u32,
-    punch: Option<f64>,
-) -> Result<Buffer> {
+pub fn decode(blurhash: String, width: u32, height: u32, punch: Option<f64>) -> Result<Buffer> {
     let p = punch.unwrap_or(1.0);
     let pixels = blurhash_core::decode(&blurhash, width, height, p)
         .map_err(|e| Error::from_reason(e.to_string()))?;
@@ -98,8 +93,8 @@ pub struct Components {
 
 #[napi]
 pub fn get_components(blurhash: String) -> Result<Components> {
-    let (cx, cy) = blurhash_core::components(&blurhash)
-        .map_err(|e| Error::from_reason(e.to_string()))?;
+    let (cx, cy) =
+        blurhash_core::components(&blurhash).map_err(|e| Error::from_reason(e.to_string()))?;
     Ok(Components {
         components_x: cx,
         components_y: cy,
@@ -133,8 +128,14 @@ impl Task for EncodeTask {
     type JsValue = String;
 
     fn compute(&mut self) -> Result<Self::Output> {
-        blurhash_core::encode(&self.data, self.width, self.height, self.components_x, self.components_y)
-            .map_err(|e| Error::from_reason(e.to_string()))
+        blurhash_core::encode(
+            &self.data,
+            self.width,
+            self.height,
+            self.components_x,
+            self.components_y,
+        )
+        .map_err(|e| Error::from_reason(e.to_string()))
     }
 
     fn resolve(&mut self, _env: Env, output: Self::Output) -> Result<Self::JsValue> {

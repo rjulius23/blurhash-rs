@@ -246,8 +246,17 @@ mod tests {
         offset = encode_to_buf(123456, 4, &mut buf, offset); // DC
         assert_eq!(offset, 6);
         // Verify each segment matches individual encode
-        assert_eq!(std::str::from_utf8(&buf[0..1]).unwrap(), encode(21, 1).unwrap());
-        assert_eq!(std::str::from_utf8(&buf[1..2]).unwrap(), encode(5, 1).unwrap());
-        assert_eq!(std::str::from_utf8(&buf[2..6]).unwrap(), encode(123456, 4).unwrap());
+        assert_eq!(
+            std::str::from_utf8(&buf[0..1]).unwrap(),
+            encode(21, 1).unwrap()
+        );
+        assert_eq!(
+            std::str::from_utf8(&buf[1..2]).unwrap(),
+            encode(5, 1).unwrap()
+        );
+        assert_eq!(
+            std::str::from_utf8(&buf[2..6]).unwrap(),
+            encode(123456, 4).unwrap()
+        );
     }
 }

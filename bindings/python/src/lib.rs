@@ -118,9 +118,8 @@ fn encode_batch(
             .iter()
             .enumerate()
             .map(|(i, (data, w, h, cx, cy))| {
-                blurhash_core::encode(data, *w, *h, *cx, *cy).map_err(|e| {
-                    PyValueError::new_err(format!("encode_batch item {}: {}", i, e))
-                })
+                blurhash_core::encode(data, *w, *h, *cx, *cy)
+                    .map_err(|e| PyValueError::new_err(format!("encode_batch item {}: {}", i, e)))
             })
             .collect::<PyResult<Vec<String>>>()
     })
@@ -146,18 +145,14 @@ fn encode_batch(
 ///     ValueError: If any hash fails to decode. The error message indicates
 ///         which item (by index) caused the failure.
 #[pyfunction]
-fn decode_batch(
-    py: Python<'_>,
-    items: Vec<(String, u32, u32, f64)>,
-) -> PyResult<Vec<Py<PyBytes>>> {
+fn decode_batch(py: Python<'_>, items: Vec<(String, u32, u32, f64)>) -> PyResult<Vec<Py<PyBytes>>> {
     let results = py.allow_threads(move || {
         items
             .iter()
             .enumerate()
             .map(|(i, (hash, w, h, punch))| {
-                blurhash_core::decode(hash, *w, *h, *punch).map_err(|e| {
-                    PyValueError::new_err(format!("decode_batch item {}: {}", i, e))
-                })
+                blurhash_core::decode(hash, *w, *h, *punch)
+                    .map_err(|e| PyValueError::new_err(format!("decode_batch item {}: {}", i, e)))
             })
             .collect::<PyResult<Vec<Vec<u8>>>>()
     })?;

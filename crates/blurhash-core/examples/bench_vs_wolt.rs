@@ -44,7 +44,13 @@ fn main() {
     println!("--- ENCODE (4x3 components) ---");
     for &(w, h) in &[(32u32, 32), (128, 128), (256, 256)] {
         let img = gradient_image(w as usize, h as usize);
-        let iters = if w <= 32 { 1000 } else if w <= 128 { 100 } else { 50 };
+        let iters = if w <= 32 {
+            1000
+        } else if w <= 128 {
+            100
+        } else {
+            50
+        };
         let ms = bench_encode(&img, w, h, 4, 3, iters);
         println!("  encode {}x{}: {:.4} ms", w, h, ms);
     }
@@ -70,7 +76,13 @@ fn main() {
     let hash99 = encode(&small, 32, 32, 9, 9).unwrap();
 
     for &(w, h) in &[(32u32, 32), (128, 128), (256, 256)] {
-        let iters = if w <= 32 { 1000 } else if w <= 128 { 100 } else { 50 };
+        let iters = if w <= 32 {
+            1000
+        } else if w <= 128 {
+            100
+        } else {
+            50
+        };
         let ms = bench_decode(&hash43, w, h, iters);
         println!("  decode {}x{} (4x3): {:.4} ms", w, h, ms);
     }

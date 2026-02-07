@@ -1,5 +1,5 @@
+use blurhash_core::{base83, decode, encode};
 use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use blurhash_core::{decode, encode, base83};
 
 // ---------------------------------------------------------------------------
 // Helpers

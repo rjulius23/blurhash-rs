@@ -2,7 +2,7 @@
 //!
 //! Run with: cargo run --example demo
 
-use blurhash_core::{decode, encode, components};
+use blurhash_core::{components, decode, encode};
 
 fn main() {
     println!("=== BlurHash Demo ===\n");
@@ -30,8 +30,14 @@ fn main() {
     // Encode to BlurHash
     let components_x = 4;
     let components_y = 3;
-    let hash = encode(&pixels, width as u32, height as u32, components_x, components_y)
-        .expect("Failed to encode");
+    let hash = encode(
+        &pixels,
+        width as u32,
+        height as u32,
+        components_x,
+        components_y,
+    )
+    .expect("Failed to encode");
 
     println!("2. Encoded to BlurHash: {}", hash);
     println!("   Components: {}x{}", components_x, components_y);
@@ -45,15 +51,24 @@ fn main() {
     let decode_width = 8;
     let decode_height = 8;
     let punch = 1.0; // Normal contrast
-    let decoded = decode(&hash, decode_width, decode_height, punch)
-        .expect("Failed to decode");
+    let decoded = decode(&hash, decode_width, decode_height, punch).expect("Failed to decode");
 
-    println!("4. Decoded to {}x{} image ({} bytes)",
-             decode_width, decode_height, decoded.len());
-    println!("   First pixel RGB: ({}, {}, {})",
-             decoded[0], decoded[1], decoded[2]);
-    println!("   Last pixel RGB: ({}, {}, {})",
-             decoded[decoded.len()-3], decoded[decoded.len()-2], decoded[decoded.len()-1]);
+    println!(
+        "4. Decoded to {}x{} image ({} bytes)",
+        decode_width,
+        decode_height,
+        decoded.len()
+    );
+    println!(
+        "   First pixel RGB: ({}, {}, {})",
+        decoded[0], decoded[1], decoded[2]
+    );
+    println!(
+        "   Last pixel RGB: ({}, {}, {})",
+        decoded[decoded.len() - 3],
+        decoded[decoded.len() - 2],
+        decoded[decoded.len() - 1]
+    );
 
     println!("\n=== Demo Complete ===");
     println!("\nTry encoding your own images!");

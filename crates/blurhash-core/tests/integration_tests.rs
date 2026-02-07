@@ -1,4 +1,4 @@
-use blurhash_core::{decode, encode, base83, components};
+use blurhash_core::{base83, components, decode, encode};
 
 // ---------------------------------------------------------------------------
 // Known test vectors
@@ -61,7 +61,11 @@ fn base83_encode_max_single_digit() {
 #[test]
 fn base83_encode_roundtrip() {
     for value in [0u64, 1, 42, 82, 83, 999, 6888, 83_u64.pow(4) - 1] {
-        let len = if value == 0 { 1 } else { (value as f64).log(83.0).floor() as usize + 1 };
+        let len = if value == 0 {
+            1
+        } else {
+            (value as f64).log(83.0).floor() as usize + 1
+        };
         let encoded = base83::encode(value, len).expect("encode ok");
         let decoded = base83::decode(&encoded).expect("valid base83");
         assert_eq!(decoded, value, "roundtrip failed for {value}");
@@ -127,7 +131,9 @@ fn decode_dc_only_white_is_white() {
         assert!(
             chunk[0] >= 253 && chunk[1] >= 253 && chunk[2] >= 253,
             "expected near-white, got ({}, {}, {})",
-            chunk[0], chunk[1], chunk[2]
+            chunk[0],
+            chunk[1],
+            chunk[2]
         );
     }
 }
@@ -203,7 +209,8 @@ fn encode_invalid_components_too_large() {
 fn encode_only_base83_chars() {
     let img = gradient_image(16, 16);
     let hash = encode(&img, 16, 16, 4, 4).expect("encode ok");
-    let valid_chars: &str = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#$%*+,-.:;=?@[]^_{|}~";
+    let valid_chars: &str =
+        "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz#$%*+,-.:;=?@[]^_{|}~";
     for ch in hash.chars() {
         assert!(
             valid_chars.contains(ch),
@@ -308,21 +315,15 @@ fn roundtrip_various_component_counts() {
     let img = gradient_image(32, 32);
     for cx in 1..=9 {
         for cy in 1..=9 {
-            let hash = encode(&img, 32, 32, cx, cy).unwrap_or_else(|e| {
-                panic!("encode failed for {cx}x{cy}: {e}")
-            });
+            let hash = encode(&img, 32, 32, cx, cy)
+                .unwrap_or_else(|e| panic!("encode failed for {cx}x{cy}: {e}"));
             let expected_len = 4 + 2 * cx as usize * cy as usize;
-            assert_eq!(
-                hash.len(),
-                expected_len,
-                "wrong hash length for {cx}x{cy}"
-            );
+            assert_eq!(hash.len(), expected_len, "wrong hash length for {cx}x{cy}");
             let (rcx, rcy) = components(&hash).unwrap();
             assert_eq!(rcx, cx);
             assert_eq!(rcy, cy);
-            let pixels = decode(&hash, 8, 8, 1.0).unwrap_or_else(|e| {
-                panic!("decode failed for {cx}x{cy}: {e}")
-            });
+            let pixels = decode(&hash, 8, 8, 1.0)
+                .unwrap_or_else(|e| panic!("decode failed for {cx}x{cy}: {e}"));
             assert_eq!(pixels.len(), 8 * 8 * 3);
         }
     }

@@ -136,7 +136,7 @@ pub fn decode(
     colours[0] = [dc_r, dc_g, dc_b];
 
     // Decode AC components using fast f32 sign_pow (x*x path for exp=2.0).
-    for component_idx in 1..num_components {
+    for (component_idx, colour) in colours.iter_mut().enumerate().take(num_components).skip(1) {
         let start = 4 + component_idx * 2;
         let ac_value = base83::decode(&blurhash[start..start + 2])?;
 
@@ -144,7 +144,7 @@ pub fn decode(
         let quant_g = ((ac_value / 19) % 19) as f32;
         let quant_b = (ac_value % 19) as f32;
 
-        colours[component_idx] = [
+        *colour = [
             sign_pow_f32((quant_r - 9.0) / 9.0, 2.0) * real_max_value,
             sign_pow_f32((quant_g - 9.0) / 9.0, 2.0) * real_max_value,
             sign_pow_f32((quant_b - 9.0) / 9.0, 2.0) * real_max_value,
@@ -164,8 +164,7 @@ pub fn decode(
         for x in 0..w {
             // SAFETY: base + x = i * w + x < sx * w, always in bounds.
             unsafe {
-                *cos_x_table.get_unchecked_mut(base + x) =
-                    (PI * x as f32 * i as f32 / wf).cos();
+                *cos_x_table.get_unchecked_mut(base + x) = (PI * x as f32 * i as f32 / wf).cos();
             }
         }
     }
@@ -177,8 +176,7 @@ pub fn decode(
         for y in 0..h {
             // SAFETY: base + y = j * h + y < sy * h, always in bounds.
             unsafe {
-                *cos_y_table.get_unchecked_mut(base + y) =
-                    (PI * y as f32 * j as f32 / hf).cos();
+                *cos_y_table.get_unchecked_mut(base + y) = (PI * y as f32 * j as f32 / hf).cos();
             }
         }
     }

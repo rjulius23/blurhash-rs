@@ -4,7 +4,6 @@
 //! multiply-accumulate loops in the separable DCT. Falls back to
 //! scalar code on unsupported platforms.
 
-
 // ---------------------------------------------------------------------------
 // Encode pass 1: dot product of cos_x row with pixel channel row
 // ---------------------------------------------------------------------------
@@ -360,6 +359,7 @@ unsafe fn dot_product_3ch_avx2(
 ///
 /// All slices must be correctly sized.
 #[inline]
+#[allow(clippy::too_many_arguments)]
 pub fn decode_accumulate_row(
     cos_y_vals: &[f32],
     partial_r: &[f32],
@@ -387,7 +387,6 @@ pub fn decode_accumulate_row(
                 linear_to_srgb_fn,
             );
         }
-        return;
     }
 
     #[cfg(not(target_arch = "aarch64"))]
@@ -407,6 +406,7 @@ pub fn decode_accumulate_row(
 
 /// Scalar fallback for decode row accumulation.
 #[inline]
+#[allow(clippy::too_many_arguments)]
 fn decode_accumulate_row_scalar(
     cos_y_vals: &[f32],
     partial_r: &[f32],
@@ -446,6 +446,7 @@ fn decode_accumulate_row_scalar(
 /// j loop as the inner scalar broadcast.
 #[cfg(target_arch = "aarch64")]
 #[target_feature(enable = "neon")]
+#[allow(clippy::too_many_arguments)]
 unsafe fn decode_accumulate_row_neon(
     cos_y_vals: &[f32],
     partial_r: &[f32],
@@ -523,7 +524,10 @@ mod tests {
         let b = vec![2.0f32, 3.0, 4.0, 5.0, 6.0];
         let result = dot_product_f32(&a, &b, 5);
         let expected: f32 = a.iter().zip(b.iter()).map(|(x, y)| x * y).sum();
-        assert!((result - expected).abs() < 1e-5, "got {result}, expected {expected}");
+        assert!(
+            (result - expected).abs() < 1e-5,
+            "got {result}, expected {expected}"
+        );
     }
 
     #[test]
@@ -592,14 +596,7 @@ mod tests {
         }
 
         decode_accumulate_row(
-            &cos_y,
-            &partial_r,
-            &partial_g,
-            &partial_b,
-            4,
-            2,
-            &mut out,
-            test_srgb,
+            &cos_y, &partial_r, &partial_g, &partial_b, 4, 2, &mut out, test_srgb,
         );
 
         // For x=0: r = 0.5*1.0 + 1.0*0.1 = 0.6 -> 153

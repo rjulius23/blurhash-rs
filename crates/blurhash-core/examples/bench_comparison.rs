@@ -69,17 +69,35 @@ fn main() {
     let encode_vs_metal = avg_encode.as_secs_f64() / 0.154;
     let decode_vs_metal = avg_decode.as_secs_f64() / 0.013;
 
-    println!("  vs Swift CPU:  encode {:.0}x faster, decode {:.0}x faster", encode_vs_swift, decode_vs_swift);
+    println!(
+        "  vs Swift CPU:  encode {:.0}x faster, decode {:.0}x faster",
+        encode_vs_swift, decode_vs_swift
+    );
     if encode_vs_metal < 1.0 {
-        println!("  vs MetalBlurHash (GPU):  encode {:.1}x faster, decode {}",
+        println!(
+            "  vs MetalBlurHash (GPU):  encode {:.1}x faster, decode {}",
             1.0 / encode_vs_metal,
-            if decode_vs_metal < 1.0 { format!("{:.1}x faster", 1.0 / decode_vs_metal) }
-            else { format!("{:.1}x slower (GPU wins)", decode_vs_metal) });
+            if decode_vs_metal < 1.0 {
+                format!("{:.1}x faster", 1.0 / decode_vs_metal)
+            } else {
+                format!("{:.1}x slower (GPU wins)", decode_vs_metal)
+            }
+        );
     } else {
-        println!("  vs MetalBlurHash (GPU):  encode {:.1}x slower (GPU wins), decode {:.1}x {}",
+        println!(
+            "  vs MetalBlurHash (GPU):  encode {:.1}x slower (GPU wins), decode {:.1}x {}",
             encode_vs_metal,
-            if decode_vs_metal > 1.0 { decode_vs_metal } else { 1.0 / decode_vs_metal },
-            if decode_vs_metal > 1.0 { "slower (GPU wins)" } else { "faster" });
+            if decode_vs_metal > 1.0 {
+                decode_vs_metal
+            } else {
+                1.0 / decode_vs_metal
+            },
+            if decode_vs_metal > 1.0 {
+                "slower (GPU wins)"
+            } else {
+                "faster"
+            }
+        );
     }
 
     println!("\nNote: MetalBlurHash uses GPU (Metal) acceleration.");

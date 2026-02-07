@@ -289,17 +289,21 @@ pub fn encode_gpu(
 
     // Create GPU buffers.
     let params_data = [width, height, components_x, components_y];
-    let params_buf = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("encode-params"),
-        contents: bytemuck::cast_slice(&params_data),
-        usage: wgpu::BufferUsages::UNIFORM,
-    });
+    let params_buf = gpu
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("encode-params"),
+            contents: bytemuck::cast_slice(&params_data),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
 
-    let pixel_buf = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("encode-pixels"),
-        contents: bytemuck::cast_slice(&linear_pixels),
-        usage: wgpu::BufferUsages::STORAGE,
-    });
+    let pixel_buf = gpu
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("encode-pixels"),
+            contents: bytemuck::cast_slice(&linear_pixels),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
 
     let components_size = (num_components * 3 * std::mem::size_of::<f32>()) as u64;
     let components_buf = gpu.device.create_buffer(&wgpu::BufferDescriptor {
@@ -388,9 +392,7 @@ pub fn encode_gpu(
             .max((chunk[2] as f64).abs());
     }
 
-    let quant_max_ac = (max_ac_component * 166.0 - 0.5)
-        .floor()
-        .clamp(0.0, 82.0) as u64;
+    let quant_max_ac = (max_ac_component * 166.0 - 0.5).floor().clamp(0.0, 82.0) as u64;
     let ac_component_norm_factor = (quant_max_ac as f64 + 1.0) / 166.0;
 
     // Quantize AC values.
@@ -511,17 +513,21 @@ pub fn decode_gpu(
 
     // Create GPU buffers.
     let params_data = [width, height, components_x, components_y];
-    let params_buf = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("decode-params"),
-        contents: bytemuck::cast_slice(&params_data),
-        usage: wgpu::BufferUsages::UNIFORM,
-    });
+    let params_buf = gpu
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("decode-params"),
+            contents: bytemuck::cast_slice(&params_data),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
 
-    let colours_buf = gpu.device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        label: Some("decode-colours"),
-        contents: bytemuck::cast_slice(&colours),
-        usage: wgpu::BufferUsages::STORAGE,
-    });
+    let colours_buf = gpu
+        .device
+        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("decode-colours"),
+            contents: bytemuck::cast_slice(&colours),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
 
     let pixels_size = (total_pixels as usize * 3 * std::mem::size_of::<f32>()) as u64;
     let pixels_buf = gpu.device.create_buffer(&wgpu::BufferDescriptor {

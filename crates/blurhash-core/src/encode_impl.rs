@@ -41,15 +41,15 @@ const fn build_cos_table_ds() -> [f32; 9 * MAX_DS] {
             // t = PI * i * x / MAX_DS, but we need to compute cos(t).
             // Map t into [0, 2*PI) range.
             let t_num = i * x; // numerator: t = PI * t_num / MAX_DS
-            // Use symmetry: cos(PI * n + r) = (-1)^n * cos(r) for reduction.
-            // t / PI = t_num / MAX_DS = q + frac where q is integer part
+                               // Use symmetry: cos(PI * n + r) = (-1)^n * cos(r) for reduction.
+                               // t / PI = t_num / MAX_DS = q + frac where q is integer part
             let q = t_num / MAX_DS;
             let frac_num = t_num - q * MAX_DS; // frac_num / MAX_DS in [0, 1)
-            // cos(PI * (q + frac)) = (-1)^q * cos(PI * frac)
+                                               // cos(PI * (q + frac)) = (-1)^q * cos(PI * frac)
             let sign: f64 = if q % 2 == 0 { 1.0 } else { -1.0 };
             // theta = PI * frac_num / MAX_DS, in [0, PI)
             // Use cos(theta) = 1 - theta^2/2! + theta^4/4! - theta^6/6! + theta^8/8!
-            let pi: f64 = 3.14159265358979323846;
+            let pi: f64 = std::f64::consts::PI;
             let theta = pi * frac_num as f64 / MAX_DS as f64;
             let t2 = theta * theta;
             let t4 = t2 * t2;
@@ -361,9 +361,7 @@ pub fn encode(
     offset = base83::encode_to_buf(size_flag as u64, 1, &mut buf, offset);
 
     // Quantized max AC component: 1 base83 digit.
-    let quant_max_ac = (max_ac_component * 166.0 - 0.5)
-        .floor()
-        .clamp(0.0, 82.0) as u64;
+    let quant_max_ac = (max_ac_component * 166.0 - 0.5).floor().clamp(0.0, 82.0) as u64;
     offset = base83::encode_to_buf(quant_max_ac, 1, &mut buf, offset);
 
     // DC value: 4 base83 digits.

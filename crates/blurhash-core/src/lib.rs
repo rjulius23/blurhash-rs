@@ -36,8 +36,7 @@ pub mod gpu;
 
 // Re-export primary functions at crate root.
 pub use color::{
-    linear_to_srgb, linear_to_srgb_f32, sign_pow, sign_pow_f32, srgb_to_linear,
-    srgb_to_linear_f32,
+    linear_to_srgb, linear_to_srgb_f32, sign_pow, sign_pow_f32, srgb_to_linear, srgb_to_linear_f32,
 };
 pub use decode_impl::{components, decode};
 pub use encode_impl::encode;
